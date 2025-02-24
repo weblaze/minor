@@ -30,8 +30,9 @@ def reduce_dimensionality():
     print(f"Explained variance ratio: {explained_variance:.3f}")
 
     # Save the reduced features in JSON format
+    # Convert float32 to regular Python float for JSON serialization
     reduced_features_dict = {
-        track_id: list(vec) 
+        track_id: [float(val) for val in vec]
         for track_id, vec in zip(track_ids, features_reduced)
     }
     
