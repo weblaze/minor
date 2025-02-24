@@ -7,6 +7,7 @@ import json
 import pandas as pd
 from torchvision.utils import make_grid
 import torch.nn.functional as F
+from sklearn.feature_selection import mutual_info_regression
 
 class TrainingAnalyzer:
     def __init__(self, output_dir="data/training_analysis"):
@@ -29,6 +30,12 @@ class TrainingAnalyzer:
             'contrast': [],
             'sharpness': [],
             'color_diversity': []
+        }
+        
+        # For feature importance analysis
+        self.feature_importance = {
+            'correlation_scores': None,
+            'mutual_info_scores': None
         }
     
     def log_batch_metrics(self, recon_loss, style_loss, div_loss, total_loss):
@@ -65,6 +72,53 @@ class TrainingAnalyzer:
         # Calculate color diversity
         color_std = np.mean([np.std(img, axis=(1, 2)) for img in imgs])
         self.image_stats['color_diversity'].append(float(color_std))
+    
+    def analyze_feature_importance(self, audio_features, generated_images):
+        """Analyze the importance of different audio features for image generation."""
+        # Convert to numpy arrays
+        if torch.is_tensor(audio_features):
+            audio_features = audio_features.detach().cpu().numpy()
+        if torch.is_tensor(generated_images):
+            generated_images = generated_images.detach().cpu().numpy()
+        
+        # Reshape images for analysis
+        img_features = generated_images.reshape(generated_images.shape[0], -1)
+        
+        # Calculate correlation between audio features and image characteristics
+        correlation_matrix = np.corrcoef(audio_features.T, img_features.T)
+        n_audio_features = audio_features.shape[1]
+        feature_correlations = np.abs(correlation_matrix[:n_audio_features, n_audio_features:]).mean(axis=1)
+        
+        # Calculate mutual information scores
+        mutual_info_scores = mutual_info_regression(audio_features, img_features.mean(axis=1))
+        
+        # Store the results
+        self.feature_importance['correlation_scores'] = feature_correlations
+        self.feature_importance['mutual_info_scores'] = mutual_info_scores
+        
+        # Plot feature importance
+        plt.figure(figsize=(12, 6))
+        plt.subplot(1, 2, 1)
+        plt.bar(range(len(feature_correlations)), feature_correlations)
+        plt.title('Feature Importance (Correlation)')
+        plt.xlabel('Feature Index')
+        plt.ylabel('Absolute Correlation')
+        
+        plt.subplot(1, 2, 2)
+        plt.bar(range(len(mutual_info_scores)), mutual_info_scores)
+        plt.title('Feature Importance (Mutual Information)')
+        plt.xlabel('Feature Index')
+        plt.ylabel('Mutual Information Score')
+        
+        plt.tight_layout()
+        plt.savefig(self.output_dir / 'feature_importance.png')
+        plt.close()
+        
+        # Save feature importance scores
+        np.save(self.output_dir / 'feature_correlations.npy', feature_correlations)
+        np.save(self.output_dir / 'mutual_info_scores.npy', mutual_info_scores)
+        
+        return feature_correlations, mutual_info_scores
     
     def plot_training_progress(self):
         """Generate plots showing training progress."""
