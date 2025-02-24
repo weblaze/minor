@@ -29,11 +29,17 @@ def generate_images(model, audio_features, output_dir, num_samples=5):
     
     # Generate images
     with torch.no_grad():
-        generated_images = model(features_tensor)
+        generated_images, _, _ = model(features_tensor)  # Unpack the tuple
     
-    # Save images
+    # Save images with enhanced contrast
     for i, image in enumerate(generated_images):
-        save_image(image, output_dir / f"generated_image_{i+1}.png")
+        # Apply additional post-processing
+        enhanced = image.cpu()
+        # Adjust contrast
+        enhanced = (enhanced - enhanced.mean()) * 1.2 + 0.5
+        enhanced = enhanced.clamp(0, 1)
+        
+        save_image(enhanced, output_dir / f"generated_image_{i+1}.png")
         print(f"Saved image {i+1} to {output_dir}/generated_image_{i+1}.png")
 
 def main():
