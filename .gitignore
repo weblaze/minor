@@ -25,3 +25,8 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+models/autoencoder/checkpoint_epoch_50.pth
+models/autoencoder/checkpoint_epoch_10.pth
+models/autoencoder/checkpoint_epoch_20.pth
+models/autoencoder/checkpoint_epoch_30.pth
+models/autoencoder/checkpoint_epoch_40.pth
