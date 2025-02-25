@@ -204,8 +204,8 @@ class AudioImageDataset(Dataset):
 def get_dataloader(audio_features_path: str, image_folder: str, 
                   batch_size: int = 32, shuffle: bool = True,
                   num_workers: int = 4, normalize_features: bool = True,
-                  augment_images: bool = True, pin_memory: bool = True,
-                  prefetch_factor: int = 2) -> DataLoader:
+                  augment_images: bool = True, augment_audio: bool = True,
+                  pin_memory: bool = True, prefetch_factor: int = 2) -> DataLoader:
     """
     Create a DataLoader for the audio-image dataset.
     
@@ -217,6 +217,7 @@ def get_dataloader(audio_features_path: str, image_folder: str,
         num_workers: Number of worker processes for data loading
         normalize_features: Whether to normalize audio features
         augment_images: Whether to apply data augmentation to images
+        augment_audio: Whether to apply data augmentation to audio features
         pin_memory: Whether to pin memory for faster GPU transfer
         prefetch_factor: Number of batches to prefetch per worker
     
@@ -228,7 +229,8 @@ def get_dataloader(audio_features_path: str, image_folder: str,
             audio_features_path=audio_features_path,
             image_folder=image_folder,
             normalize_features=normalize_features,
-            augment_images=augment_images
+            augment_images=augment_images,
+            augment_audio=augment_audio
         )
         
         return DataLoader(

@@ -13,16 +13,19 @@ from torchvision import transforms
 from torch.amp import autocast, GradScaler
 import gc
 from tqdm import tqdm
+import numpy as np
 
-# Set CUDA configurations for better GPU performance
+# Enhanced CUDA memory management
 torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.deterministic = False
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
 
 # Set memory allocation configuration
 if torch.cuda.is_available():
-    # Enable expandable segments to avoid fragmentation
-    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:512,expandable_segments:True'
-    # Empty cache
+    # More aggressive memory settings
+    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:128,garbage_collection_threshold:0.8,roundup_power2_divisions:16'
+    # Empty cache and collect garbage
     torch.cuda.empty_cache()
     gc.collect()
 
@@ -108,41 +111,54 @@ def perceptual_loss(vgg, generated, target):
     return total_loss
 
 def diversity_loss(features):
-    """Simplified and stable diversity loss calculation."""
-    # Clamp features to prevent extreme values
-    features = torch.clamp(features, -10, 10)
+    """Enhanced diversity loss calculation with better regularization."""
+    # Normalize features for stable calculations
+    features = F.instance_norm(features)
     
-    # Quick spatial diversity with stability
-    spatial_std = torch.clamp(features.std(dim=[2, 3]), min=1e-6)  # [B, C]
-    spatial_diversity = -torch.mean(torch.log1p(spatial_std))
+    # Spatial diversity - encourage variation across spatial dimensions
+    spatial_std = torch.std(features, dim=[2, 3])  # [B, C]
+    spatial_diversity = -torch.mean(torch.log(spatial_std + 1e-6))
     
-    # Quick batch diversity with stability
-    mean_features = features.mean(dim=[2, 3])  # [B, C]
-    mean_features = F.normalize(mean_features, dim=1)  # Normalize for stable distances
-    batch_diversity = -torch.mean(torch.pdist(mean_features))
+    # Channel diversity - encourage variation across channels
+    channel_std = torch.std(features, dim=1)  # [B, H, W]
+    channel_diversity = -torch.mean(torch.log(channel_std + 1e-6))
     
-    # Simplified color balance with stability
+    # Batch diversity - encourage variation across batch
+    batch_features = features.mean(dim=[2, 3])  # [B, C]
+    batch_features = F.normalize(batch_features, dim=1)
+    similarity = torch.mm(batch_features, batch_features.t())
+    batch_diversity = torch.mean(similarity) - torch.mean(torch.diagonal(similarity))
+    
+    # Color balance - encourage balanced color distribution
     color_mean = features.mean(dim=[0, 2, 3])  # [C]
     color_balance = torch.mean((color_mean - 0.5).pow(2))
     
-    # Combine with scaling
+    # Combine with balanced weights
     total_div = (
-        0.1 * spatial_diversity +
-        0.1 * batch_diversity +
-        0.01 * color_balance
+        0.3 * spatial_diversity +
+        0.3 * channel_diversity +
+        0.3 * batch_diversity +
+        0.1 * color_balance
     )
     
     return torch.clamp(total_div, -1.0, 1.0)
 
 def kl_loss(mu, logvar):
-    """Calculate KL divergence loss with stability measures."""
+    """Enhanced KL divergence loss with better stability and regularization."""
     # Clamp values for stability
     mu = torch.clamp(mu, -10, 10)
     logvar = torch.clamp(logvar, -10, 10)
     
-    # Calculate KL divergence with numerical stability
-    kl_div = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
-    return torch.clamp(kl_div, 0.0, 10.0)
+    # Standard KL divergence
+    kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1)
+    
+    # Add regularization terms
+    mu_reg = 0.01 * torch.mean(torch.abs(mu))  # L1 on mean
+    var_reg = 0.01 * torch.mean(torch.abs(logvar.exp() - 1))  # Encourage unit variance
+    
+    # Combine losses
+    total_kl = torch.mean(kld) + mu_reg + var_reg
+    return torch.clamp(total_kl, 0.0, 10.0)
 
 def train():
     # Set paths
@@ -170,66 +186,87 @@ def train():
         device = torch.device("cpu")
         print("CUDA is not available. Using CPU")
 
-    # Load dataset with enhanced settings
+    # Load dataset with optimized settings
     print("Loading dataset...")
     dataloader = get_dataloader(
         audio_features_path, 
         image_folder, 
-        batch_size=8,
+        batch_size=4,  # Reduced batch size for better memory management
         num_workers=2,
         pin_memory=True,
+        prefetch_factor=2,  # Reduced prefetch factor
         normalize_features=True,
         augment_images=True,
-        augment_audio=True  # Enable audio augmentation
+        augment_audio=True
     )
 
-    # Initialize model
+    # Initialize model with memory optimizations
     print("Initializing model...")
-    model = AudioToImageAutoencoder().to(device)
+    model = AudioToImageAutoencoder(image_size=128).to(device)
     
-    # Enable gradient checkpointing for memory efficiency
-    if hasattr(model, 'enable_gradient_checkpointing'):
-        model.enable_gradient_checkpointing()
+    # Enable gradient checkpointing for all supported layers
+    def enable_grad_checkpointing(module):
+        if hasattr(module, 'gradient_checkpointing'):
+            module.gradient_checkpointing = True
+        if hasattr(module, 'enable_gradient_checkpointing'):
+            module.enable_gradient_checkpointing()
     
-    # Use DataParallel only if multiple GPUs are available
-    if torch.cuda.device_count() > 1:
+    model.apply(enable_grad_checkpointing)
+    
+    # Use DataParallel only if multiple GPUs are available and enough memory
+    if torch.cuda.device_count() > 1 and torch.cuda.get_device_properties(0).total_memory > 8e9:  # 8GB
         model = torch.nn.DataParallel(model)
     
-    # Initialize gradient scaler for mixed precision training
-    scaler = GradScaler()
+    # Initialize gradient scaler with more aggressive settings
+    scaler = GradScaler(
+        init_scale=65536,    # 2^16
+        growth_interval=100,  # More frequent scaling updates
+        growth_factor=2.0,    # More aggressive scaling
+        backoff_factor=0.5,   # Less aggressive backoff
+        enabled=True
+    )
     
-    # Memory-optimized training parameters
+    # Improved optimizer settings
     optimizer = optim.AdamW(
         model.parameters(),
-        lr=0.0005,
-        betas=(0.9, 0.999),
-        weight_decay=0.01,
+        lr=0.0001,  # Lower initial learning rate
+        betas=(0.5, 0.999),
+        weight_decay=0.02,  # Increased weight decay
         eps=1e-8
     )
     
-    # Training configuration
-    num_epochs = 20
-    warmup_epochs = 2
-    save_every = 4
-    analyze_features_every = 5  # Analyze feature importance every 5 epochs
+    # Enhanced training configuration
+    num_epochs = 100  # Double the epochs
+    warmup_epochs = 10  # Longer warmup
+    save_every = 5
+    analyze_features_every = 5
     
-    # Learning rate schedule with gentler changes
+    # Improved learning rate schedule
     scheduler = OneCycleLR(
         optimizer,
-        max_lr=0.0005,
+        max_lr=0.0003,
         epochs=num_epochs,
         steps_per_epoch=len(dataloader),
-        pct_start=0.2,
-        anneal_strategy='cos',
-        div_factor=5.0,
-        final_div_factor=50.0
+        pct_start=0.2,  # Faster warmup
+        div_factor=25.0,  # Larger lr range
+        final_div_factor=1000.0,
+        anneal_strategy='cos'
     )
 
-    # KL annealing parameters with gentler ramp-up
-    kl_weight = 0.0
+    # Enhanced KL annealing with cyclic schedule
+    kl_weight_min = 0.0
     kl_weight_max = 0.1
-    kl_warmup_steps = warmup_epochs * len(dataloader)
-    kl_step = 0
+    kl_cycle_epochs = 10  # Cycle KL weight every 10 epochs
+    
+    # Initialize VGG for perceptual loss
+    vgg = VGGFeatureExtractor(device)
+    
+    # Initialize latent space monitoring
+    latent_stats = {
+        'mu_mean': [], 'mu_std': [],
+        'logvar_mean': [], 'logvar_std': [],
+        'z_activity': []  # Track which latent dimensions are active
+    }
     
     print(f"Starting training for {num_epochs} epochs")
     print(f"Total iterations per epoch: {len(dataloader)}")
@@ -237,72 +274,90 @@ def train():
     
     for epoch in range(num_epochs):
         model.train()
-        total_recon_loss = total_kl_loss = total_div_loss = 0
+        total_recon_loss = total_kl_loss = total_perceptual_loss = total_div_loss = 0
+        epoch_mu = []
+        epoch_logvar = []
         
-        # Clear memory at start of epoch
-        torch.cuda.empty_cache()
-        gc.collect()
+        # Calculate cyclic KL weight
+        progress = (epoch % kl_cycle_epochs) / kl_cycle_epochs
+        if epoch < warmup_epochs:
+            # Linear warmup during warmup epochs
+            kl_weight = kl_weight_max * (epoch / warmup_epochs)
+        else:
+            # Cyclic schedule after warmup
+            kl_weight = kl_weight_min + 0.5 * (kl_weight_max - kl_weight_min) * \
+                       (1 + np.cos(progress * np.pi))
         
         pbar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{num_epochs}")
         
-        # Collect batches for feature analysis
-        if (epoch + 1) % analyze_features_every == 0:
-            epoch_audio_features = []
-            epoch_generated_images = []
-        
         for batch_idx, (audio, image) in enumerate(pbar):
-            # Non-blocking GPU transfer
-            audio = audio.to(device, non_blocking=True)
-            image = image.to(device, non_blocking=True)
+            # Move data to GPU with non_blocking and explicit stream
+            current_stream = torch.cuda.current_stream()
+            with torch.cuda.stream(current_stream):
+                audio = audio.to(device, non_blocking=True)
+                image = image.to(device, non_blocking=True)
             
-            optimizer.zero_grad(set_to_none=True)
+            # Ensure data transfer is complete
+            current_stream.synchronize()
+            
+            optimizer.zero_grad(set_to_none=True)  # More efficient than zero_grad()
             
             try:
-                device_type = 'cuda' if torch.cuda.is_available() else 'cpu'
-                with torch.amp.autocast(device_type):
-                    # Generate images
+                with torch.amp.autocast(device_type='cuda', dtype=torch.float16):
+                    # Generate images with memory optimization
                     generated, mu, logvar = model(audio)
                     
-                    # Calculate reconstruction loss with stability
-                    recon_loss = F.mse_loss(
-                        torch.clamp(generated, 0, 1),
-                        torch.clamp(image, 0, 1)
-                    )
-                    recon_loss = torch.clamp(recon_loss, 0.0, 10.0)
+                    # Store latent variables for monitoring
+                    epoch_mu.append(mu.detach().cpu())
+                    epoch_logvar.append(logvar.detach().cpu())
                     
-                    # Calculate diversity loss with reduced frequency
+                    # Calculate losses with memory-efficient operations
+                    recon_loss = F.mse_loss(generated, image, reduction='mean')
+                    perceptual = perceptual_loss(vgg, generated, image)
+                    
+                    # Only calculate diversity loss occasionally to save memory
                     if batch_idx % 4 == 0:
-                        div_loss = 0.1 * diversity_loss(generated)
+                        div_loss = diversity_loss(generated)
                     else:
                         div_loss = torch.tensor(0.0, device=device)
                     
-                    # KL loss with gentler annealing
-                    kl_weight = min(kl_weight_max, 0.5 * (1 - torch.cos(torch.tensor(kl_step / kl_warmup_steps) * torch.pi)))
                     kl_div = kl_weight * kl_loss(mu, logvar)
-                    kl_step += 1
                     
-                    # Combined loss with stability check
-                    loss = recon_loss + div_loss + kl_div
+                    # Dynamic loss weighting based on training progress
+                    recon_weight = 1.0
+                    perceptual_weight = min(0.3, 0.1 + 0.2 * (epoch / num_epochs))
+                    div_weight = min(0.2, 0.05 + 0.15 * (epoch / num_epochs))
+                    
+                    # Combined loss
+                    loss = (
+                        recon_weight * recon_loss +
+                        perceptual_weight * perceptual +
+                        div_weight * div_loss +
+                        kl_div
+                    )
                     
                     # Collect data for feature analysis
                     if (epoch + 1) % analyze_features_every == 0:
-                        epoch_audio_features.append(audio.detach().cpu())
-                        epoch_generated_images.append(generated.detach().cpu())
+                        analyzer.analyze_image_quality(generated)
                     
                     # Check for NaN and reset if found
                     if torch.isnan(loss):
                         print(f"\nNaN detected! Skipping batch {batch_idx}")
-                        print(f"recon_loss: {recon_loss.item():.4f}, div_loss: {div_loss.item():.4f}, kl_div: {kl_div.item():.4f}")
+                        print(f"recon_loss: {recon_loss.item():.4f}, perceptual: {perceptual.item():.4f}, "
+                              f"div_loss: {div_loss.item():.4f}, kl_div: {kl_div.item():.4f}")
                         optimizer.zero_grad(set_to_none=True)
                         continue
                     
-                    # Clear intermediate tensors
+                    # Clear unnecessary tensors
                     del mu, logvar
                 
-                # Optimized backward pass with gradient clipping
+                # Memory-efficient backward pass
                 scaler.scale(loss).backward()
+                
+                # Unscale before clip to handle potential inf/nan
                 scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.5)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                
                 scaler.step(optimizer)
                 scaler.update()
                 scheduler.step()
@@ -310,6 +365,7 @@ def train():
                 # Update metrics every 10 batches
                 if batch_idx % 10 == 0:
                     total_recon_loss += recon_loss.item()
+                    total_perceptual_loss += perceptual.item()
                     total_kl_loss += kl_div.item()
                     total_div_loss += div_loss.item()
                     
@@ -317,7 +373,7 @@ def train():
                     pbar.set_postfix({
                         'loss': f"{loss.item():.4f}",
                         'recon': f"{recon_loss.item():.4f}",
-                        'div': f"{div_loss.item():.4f}",
+                        'percep': f"{perceptual.item():.4f}",
                         'lr': f"{scheduler.get_last_lr()[0]:.6f}"
                     })
                 
@@ -325,38 +381,64 @@ def train():
                 if batch_idx % 50 == 0:
                     analyzer.analyze_image_quality(generated)
                 
-                # Clear memory every 25 batches
-                if batch_idx % 25 == 0:
-                    torch.cuda.empty_cache()
+                # Aggressive cleanup after each step
+                del loss, recon_loss, perceptual, div_loss, kl_div, generated
+                torch.cuda.empty_cache()
+                
+                # Force garbage collection periodically
+                if batch_idx % 10 == 0:
+                    gc.collect()
                 
             except RuntimeError as e:
-                print(f"Error in batch {batch_idx}: {str(e)}")
-                continue
+                if "out of memory" in str(e):
+                    print(f"\nCUDA OOM in batch {batch_idx}. Clearing cache and reducing batch...")
+                    torch.cuda.empty_cache()
+                    gc.collect()
+                    continue
+                else:
+                    print(f"Error in batch {batch_idx}: {str(e)}")
+                    continue
             
             # Aggressive variable cleanup
-            del loss, recon_loss, div_loss, kl_div, generated, audio, image
             torch.cuda.empty_cache()
         
         # Calculate epoch metrics
-        avg_recon = total_recon_loss / (len(dataloader) // 10)
-        avg_kl = total_kl_loss / (len(dataloader) // 10)
-        avg_div = total_div_loss / (len(dataloader) // 10)
+        num_batches = len(dataloader) // 10
+        avg_recon = total_recon_loss / num_batches
+        avg_perceptual = total_perceptual_loss / num_batches
+        avg_kl = total_kl_loss / num_batches
+        avg_div = total_div_loss / num_batches
         
-        # Log epoch metrics
-        analyzer.log_epoch_metrics(avg_recon, avg_kl, avg_div)
+        # Monitor latent space
+        epoch_mu = torch.cat(epoch_mu, dim=0)
+        epoch_logvar = torch.cat(epoch_logvar, dim=0)
         
-        # Analyze feature importance
-        if (epoch + 1) % analyze_features_every == 0:
-            print("\nAnalyzing feature importance...")
-            epoch_audio_features = torch.cat(epoch_audio_features, dim=0)
-            epoch_generated_images = torch.cat(epoch_generated_images, dim=0)
-            analyzer.analyze_feature_importance(epoch_audio_features, epoch_generated_images)
-            print("Feature importance analysis completed")
+        latent_stats['mu_mean'].append(epoch_mu.mean().item())
+        latent_stats['mu_std'].append(epoch_mu.std().item())
+        latent_stats['logvar_mean'].append(epoch_logvar.mean().item())
+        latent_stats['logvar_std'].append(epoch_logvar.std().item())
+        
+        # Calculate latent dimension activity
+        z_activity = (torch.abs(epoch_mu) > 0.1).float().mean(0)
+        latent_stats['z_activity'].append(z_activity.numpy())
+        
+        # Log enhanced metrics
+        analyzer.log_epoch_metrics(
+            avg_recon, avg_perceptual, avg_kl, avg_div,
+            kl_weight=kl_weight,
+            active_dims=z_activity.mean().item(),
+            mu_stats={'mean': latent_stats['mu_mean'][-1], 
+                     'std': latent_stats['mu_std'][-1]},
+            logvar_stats={'mean': latent_stats['logvar_mean'][-1],
+                         'std': latent_stats['logvar_std'][-1]}
+        )
         
         print(f"\nEpoch {epoch+1} Summary:")
-        print(f"Recon: {avg_recon:.4f}, KL: {avg_kl:.4f}, Div: {avg_div:.4f}")
+        print(f"Recon: {avg_recon:.4f}, Perceptual: {avg_perceptual:.4f}")
+        print(f"KL: {avg_kl:.4f} (weight: {kl_weight:.4f}), Div: {avg_div:.4f}")
+        print(f"Active latent dims: {(z_activity > 0.1).sum().item()}/{len(z_activity)}")
         
-        # Save checkpoints
+        # Save checkpoints with enhanced metadata
         if (epoch + 1) % save_every == 0:
             checkpoint_path = f"models/autoencoder/checkpoint_epoch_{epoch+1}.pth"
             torch.save({
@@ -366,20 +448,26 @@ def train():
                 'scheduler_state_dict': scheduler.state_dict(),
                 'scaler_state_dict': scaler.state_dict(),
                 'loss': avg_recon,
+                'latent_stats': latent_stats,
+                'kl_weight': kl_weight
             }, checkpoint_path)
             
             # Generate and save visualization plots
-            analyzer.plot_training_progress()
+            analyzer.plot_training_progress(latent_stats)
             
             # Clear memory after checkpoint
             torch.cuda.empty_cache()
             gc.collect()
+        
+        # Memory cleanup between epochs
+        torch.cuda.empty_cache()
+        gc.collect()
     
     print("Training completed!")
     
-    # Save final analysis
-    analyzer.save_metrics()
-    analyzer.generate_report()
+    # Save final analysis with latent space statistics
+    analyzer.save_metrics(latent_stats)
+    analyzer.generate_report(latent_stats)
 
 if __name__ == "__main__":
     train() 
