@@ -4,7 +4,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from models.autoencoder.audio_vae import AudioVAE
-from datasets import AudioFeatureDataset
+from models.autoencoder.datasets import AudioFeatureDataset
 import os
 import math
 

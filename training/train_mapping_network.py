@@ -6,7 +6,7 @@ from models.autoencoder.audio_vae import AudioVAE
 from models.autoencoder.image_vae import ImageVAE
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from models.autoencoder.mapping_network import MappingNetwork
-from datasets import AudioFeatureDataset, ImageDataset
+from models.autoencoder.datasets import AudioFeatureDataset, ImageDataset
 import os
 
 # Paths

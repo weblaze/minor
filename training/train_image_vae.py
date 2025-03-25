@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torchvision.models import vgg16
 from models.autoencoder.image_vae import ImageVAE
-from datasets import ImageDataset
+from models.autoencoder.datasets import ImageDataset
 import os
 import math
 
