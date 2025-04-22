@@ -28,6 +28,9 @@ def extract_temporal_features(audio_path):
 
         # Process in segments and average
         mfccs_list = []
+        spectral_centroids_list = []
+        rms_list = []
+        tempos = []
         for i in range(N_SEGMENTS):
             start = i * SEGMENT_SAMPLES
             end = (i + 1) * SEGMENT_SAMPLES
@@ -36,26 +39,54 @@ def extract_temporal_features(audio_path):
             if np.all(segment == 0):
                 print(f"Warning: Segment {i} of {audio_path} is all zeros, skipping segment")
                 continue
+            # Extract MFCCs
             mfccs = librosa.feature.mfcc(y=segment, sr=sr, n_mfcc=N_MFCC, n_fft=2048, hop_length=512)
-            # Check for NaN or Inf in MFCCs
             if np.isnan(mfccs).any() or np.isinf(mfccs).any():
                 print(f"Warning: MFCCs for segment {i} of {audio_path} contain NaN or Inf, skipping segment")
                 continue
             mfccs_list.append(mfccs.T)
-        
+            # Extract spectral centroid
+            spectral_centroid = librosa.feature.spectral_centroid(y=segment, sr=sr, hop_length=512)
+            spectral_centroids_list.append(spectral_centroid.T)
+            # Extract RMS
+            rms = librosa.feature.rms(y=segment, hop_length=512)
+            rms_list.append(rms.T)
+            # Extract tempo
+            tempo, _ = librosa.beat.beat_track(y=segment, sr=sr, hop_length=512)
+            tempos.append(tempo)
+
         if not mfccs_list:
             print(f"Error: No valid segments for {audio_path}")
             return None
-        
-        mfccs = np.stack(mfccs_list, axis=0).mean(axis=0)  # Average over segments
-        # Check for NaN or Inf in averaged MFCCs
-        if np.isnan(mfccs).any() or np.isinf(mfccs).any():
-            print(f"Error: Averaged MFCCs for {audio_path} contain NaN or Inf")
+
+        # Average over segments
+        mfccs = np.stack(mfccs_list, axis=0).mean(axis=0)  # Shape: (time_steps, N_MFCC)
+        spectral_centroids = np.stack(spectral_centroids_list, axis=0).mean(axis=0)  # Shape: (time_steps, 1)
+        rms = np.stack(rms_list, axis=0).mean(axis=0)  # Shape: (time_steps, 1)
+        tempo = np.mean(tempos)  # Scalar
+
+        # Check for NaN or Inf in features
+        if (np.isnan(mfccs).any() or np.isinf(mfccs).any() or
+            np.isnan(spectral_centroids).any() or np.isinf(spectral_centroids).any() or
+            np.isnan(rms).any() or np.isinf(rms).any() or
+            np.isnan(tempo) or np.isinf(tempo)):
+            print(f"Error: Features for {audio_path} contain NaN or Inf")
             return None
-        
-        # Normalize the features to prevent large values
+
+        # Normalize the features
         mfccs = (mfccs - np.mean(mfccs)) / (np.std(mfccs) + 1e-8)
-        return mfccs  # Shape: (time_steps, N_MFCC)
+        spectral_centroids = spectral_centroids / 4000.0  # Normalize to [0, 1]
+        rms = (rms - np.mean(rms)) / (np.std(rms) + 1e-8)  # Explicit normalization
+        tempo = (tempo - 60) / (200 - 60)  # Normalize to [0, 1]
+
+        # Combine features into a dictionary
+        features = {
+            'mfccs': mfccs,
+            'spectral_centroid': spectral_centroids,
+            'rms': rms,
+            'tempo': tempo
+        }
+        return features
 
     except Exception as e:
         print(f"Error processing {audio_path}: {e}")
@@ -64,18 +95,22 @@ def extract_temporal_features(audio_path):
 def process_audio_dataset(dataset_path):
     if not os.path.exists(dataset_path):
         raise FileNotFoundError(f"Audio dataset path does not exist: {dataset_path}")
-    for genre_folder in tqdm(os.listdir(dataset_path), desc="Processing Audio"):
+    skipped_files = 0
+    for genre_folder in tqdm(os.listdir(dataset_path), desc="Processing Genres"):
         genre_path = os.path.join(dataset_path, genre_folder)
         if os.path.isdir(genre_path):
-            for file in os.listdir(genre_path):
+            for file in tqdm(os.listdir(genre_path), desc="Processing Files", leave=False):
                 if file.endswith((".mp3", ".wav")):
                     file_path = os.path.join(genre_path, file)
                     features = extract_temporal_features(file_path)
                     if features is not None:
                         feature_filename = file.rsplit(".", 1)[0] + ".npy"
                         np.save(os.path.join(OUTPUT_DIR, feature_filename), features)
+                        print(f"Saved features to {os.path.join(OUTPUT_DIR, feature_filename)} with keys {features.keys()}")
+                    else:
+                        skipped_files += 1
+    print(f"✅ Audio feature extraction complete! Skipped {skipped_files} files due to errors.")
 
 if __name__ == "__main__":
     print("Extracting audio features...")
     process_audio_dataset(DATASET_PATH)
-    print("✅ Audio feature extraction complete!")

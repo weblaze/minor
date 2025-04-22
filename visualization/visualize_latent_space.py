@@ -3,7 +3,7 @@ import os
 import sys
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 import numpy as np
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
@@ -27,11 +27,10 @@ MAPPING_MODEL_PATH = os.path.join(BASE_DIR, "tmodels", "mapping_network.pth")
 OUTPUT_DIR = os.path.join(BASE_DIR, "visualization", "latent_space_plots")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-tsne = TSNE(n_components=2, perplexity=30, learning_rate=200, random_state=42)
-# Hyperparameters
-LATENT_DIM = 256
+# Hyperparameters (match training configuration)
+LATENT_DIM = 512  # Updated to match trained image_vae.pth
 BATCH_SIZE = 8
-NUM_SAMPLES_PER_DOMAIN = 100  # Number of samples to visualize per domain (image and audio)
+NUM_SAMPLES_PER_DOMAIN = 100  # Number of samples to visualize per domain
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
@@ -63,7 +62,7 @@ image_vae = ImageVAE(latent_dim=LATENT_DIM).to(device)
 image_vae.load_state_dict(torch.load(IMAGE_MODEL_PATH, map_location=device))
 image_vae.eval()
 
-audio_vae = AudioVAE(input_channels=20, time_steps=216, latent_dim=LATENT_DIM).to(device)
+audio_vae = AudioVAE(input_channels=22, time_steps=216, latent_dim=LATENT_DIM).to(device)  # Updated input_channels to 22
 audio_vae.load_state_dict(torch.load(AUDIO_MODEL_PATH, map_location=device))
 audio_vae.eval()
 
@@ -79,7 +78,7 @@ def extract_image_latents(loader, model, num_samples):
             if i * BATCH_SIZE >= num_samples:
                 break
             images = batch.to(device)
-            mu, logvar = model.encode(images)
+            mu, logvar, _ = model.encode(images)  # Unpack skips
             # Clamp logvar to prevent numerical instability
             logvar = torch.clamp(logvar, min=-10, max=10)
             z = model.reparameterize(mu, logvar)
@@ -96,15 +95,21 @@ def extract_audio_latents(loader, audio_vae, mapping_network, num_samples):
         for i, batch in enumerate(loader):
             if i * BATCH_SIZE >= num_samples:
                 break
-            audio_features = batch.transpose(1, 2).to(device)  # [batch_size, 20, 216]
+            audio_features = torch.cat([batch['mfccs'], batch['spectral_centroid'], batch['rms']], dim=1).to(device)  # [batch_size, 22, 216]
             mu_audio, logvar_audio, _ = audio_vae.encode(audio_features)
             # Clamp logvar to prevent numerical instability
             logvar_audio = torch.clamp(logvar_audio, min=-10, max=10)
-            z_audio = audio_vae.reparameterize(mu_audio, logvar_audio)  # [batch_size, 256]
-            mu_mapped, logvar_mapped = mapping_network(z_audio)
+            z_audio = audio_vae.reparameterize(mu_audio, logvar_audio)  # [batch_size, 1024]
+            # Use mean condition (simplified for visualization)
+            condition = torch.stack([
+                batch['spectral_centroid'].mean(dim=2).squeeze(1).to(device),
+                batch['rms'].mean(dim=2).squeeze(1).to(device),
+                batch['tempo'].squeeze().to(device)
+            ], dim=1)
+            mu_mapped, logvar_mapped = mapping_network(z_audio, condition)
             # Clamp mapped logvar as well
             logvar_mapped = torch.clamp(logvar_mapped, min=-10, max=10)
-            z_mapped = mapping_network.reparameterize(mu_mapped, logvar_mapped)  # [batch_size, 256]
+            z_mapped = mapping_network.reparameterize(mu_mapped, logvar_mapped)  # [batch_size, 1024]
             latents.append(z_mapped.cpu().numpy())
     latents = np.concatenate(latents, axis=0)[:num_samples]
     if np.any(np.isnan(latents)) or np.any(np.isinf(latents)):
