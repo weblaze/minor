@@ -1,197 +1,165 @@
-# Audio-to-Image Generation: Abstract Art from Music
+<h1 align="center">Synesthesia: Audio-to-Image Generation (v0.1.0) 🎶➡️🖼️</h1>
 
-## Overview
+<p align="center">
+  <b>Transforming music and audio features into unique abstract art using Variational Autoencoders (VAEs) and Latent Space Mapping.</b>
+</p>
 
-This project implements an audio-to-image generation pipeline that transforms audio inputs into abstract art images using a combination of Variational Autoencoders (VAEs) and a mapping network. The pipeline consists of three main components:
+## 📖 Overview
 
-1. **AudioVAE**: Encodes audio features into a latent space.
-2. **ImageVAE**: Encodes and decodes abstract art images into/from a latent space.
-3. **MappingNetwork**: Maps the audio latent space to the image latent space, enabling the generation of images from audio inputs.
+Synesthesia is an experimental deep learning pipeline that bridges the gap between sound and vision. By extracting acoustical features from audio files (MFCCs, spectral centroids, RMS, and tempo), the system maps the audio landscape to a visual latent space, which is then decoded into generative abstract art.
 
-The project uses PyTorch for model implementation and training, and the generated images are abstract art pieces inspired by the audio inputs. The audio dataset contains diverse audio features, and the image dataset includes a variety of unique abstract art images.
-
-### Current Status
-- The pipeline successfully generates images from audio inputs.
-- However, the generated images currently lack diversity, producing nearly identical outputs with only slight shape variations, despite diverse audio inputs and variability in the latent spaces (`z_audio` and `z_image`).
-- The primary issue has been identified as a limitation in the `ImageVAE`, likely due to a constrained latent space (KLD of 5.8492, on the lower side of the target range 3.0–6.0) and/or limited decoder capacity.
-- Efforts are underway to retrain the `ImageVAE` with a higher KLD (`MAX_BETA=4.0`, `KLD_WEIGHT=1.5`) to improve diversity.
-
-## Project Structure
-
-```
-audio-to-image-generation/
-│
-├── datasets/
-│   ├── audio_features/         # Directory containing preprocessed audio features
-│   └── abstract_art/           # Directory containing abstract art images
-│
-├── audio_vae.py                # AudioVAE model implementation
-├── image_vae.py                # ImageVAE model implementation
-├── mapping_network.py          # MappingNetwork model implementation
-├── datasets.py                 # Dataset classes (AudioFeatureDataset, ImageDataset)
-├── train_audio_vae.py          # Script to train the AudioVAE
-├── train_image_vae.py          # Script to train the ImageVAE
-├── train_mapping_network.py    # Script to train the MappingNetwork
-├── generate_image.py           # Script to generate images from audio inputs
-│
-├── audio_vae.pth               # Pre-trained AudioVAE model weights
-├── image_vae.pth               # Pre-trained ImageVAE model weights
-├── mapping_network.pth         # Pre-trained MappingNetwork model weights
-│
-├── generated_images/           # Directory where generated images are saved
-│
-└── README.md                   # Project documentation (this file)
-```
-
-## Requirements
-
-- Python 3.8+
-- PyTorch 1.9+
-- Torchvision
-- NumPy
-- (Optional) Librosa (for audio feature extraction, if not preprocessed)
-
-Install the required dependencies using:
-
-```bash
-pip install torch torchvision numpy
-```
-
-If you need to preprocess audio files, install Librosa:
-
-```bash
-pip install librosa
-```
-
-## Setup
-
-1. **Prepare the Datasets**:
-   - **Audio Features**: Place preprocessed audio features (e.g., MFCCs, spectrograms) in the `datasets/audio_features/` directory. The `AudioFeatureDataset` expects normalized features with shape `(channels, time_steps)`, where `channels=20` and `time_steps=216`.
-   - **Abstract Art Images**: Place abstract art images in the `datasets/abstract_art/` directory. The `ImageDataset` expects images to be in a format compatible with Torchvision (e.g., PNG, JPEG).
-
-2. **Pre-trained Models**:
-   - The pre-trained model weights (`audio_vae.pth`, `image_vae.pth`, `mapping_network.pth`) should be in the project root directory. If you need to train the models from scratch, follow the training steps below.
-
-3. **Directory for Generated Images**:
-   - The `generate_image.py` script saves generated images to the `generated_images/` directory. This directory will be created automatically if it doesn’t exist.
-
-## Usage
-
-### 1. Train the Models (Optional)
-If you don’t have the pre-trained model weights, you can train the models from scratch.
-
-#### Train the AudioVAE
-The `AudioVAE` encodes audio features into a latent space.
-
-```bash
-python train_audio_vae.py
-```
-
-- **Hyperparameters**:
-  - `BATCH_SIZE`: 16
-  - `EPOCHS`: 100
-  - `LEARNING_RATE`: 1e-4
-  - `LATENT_DIM`: 64
-  - `MAX_BETA`: 3.0 (for KLD regularization)
-- **Output**: Saves the trained model to `audio_vae.pth`.
-
-#### Train the ImageVAE
-The `ImageVAE` encodes and decodes abstract art images into/from a latent space.
-
-```bash
-python train_image_vae.py
-```
-
-- **Hyperparameters**:
-  - `BATCH_SIZE`: 16
-  - `EPOCHS`: 75
-  - `LEARNING_RATE`: 1e-4
-  - `LATENT_DIM`: 64
-  - `MAX_BETA`: 4.0 (increased from 3.0 to improve diversity)
-  - `KLD_WEIGHT`: 1.5 (added to emphasize KLD)
-- **Output**: Saves the trained model to `image_vae.pth`.
-- **Note**: The current `ImageVAE` model has a KLD of 5.8492, which is being increased to improve diversity in generated images.
-
-#### Train the MappingNetwork
-The `MappingNetwork` maps the audio latent space to the image latent space.
-
-```bash
-python train_mapping_network.py
-```
-
-- **Hyperparameters**:
-  - `BATCH_SIZE`: 16
-  - `EPOCHS`: 100
-  - `LEARNING_RATE`: 1e-4
-  - `LATENT_DIM`: 64
-- **Output**: Saves the trained model to `mapping_network.pth`.
-- **Training Progress**:
-  - Epoch 20: Mapping Loss: 0.6079
-  - Estimated losses (based on trend):
-    - Epoch 25: Mapping Loss: 0.6014
-    - Epoch 50: Mapping Loss: 0.5689
-    - Epoch 100: Mapping Loss: 0.5439
-  - Actual loss values for epochs 25, 50, and 100 should be confirmed after training completion.
-
-### 2. Generate Images from Audio
-Use the `generate_image.py` script to generate abstract art images from audio inputs.
-
-```bash
-python generate_image.py
-```
-
-- **What It Does**:
-  - Selects 10 random audio samples from the `AudioFeatureDataset`.
-  - Encodes each audio sample into a latent vector (`z_audio`) using the `AudioVAE`.
-  - Maps `z_audio` to an image latent vector (`z_image`) using the `MappingNetwork`.
-  - Decodes `z_image` into an image using the `ImageVAE`.
-  - Saves the generated images as `generated_image_1.png` to `generated_image_10.png` in the `generated_images/` directory.
-- **Hyperparameters**:
-  - `LATENT_DIM`: 64
-  - `LOGVAR_SCALE`: 2.0 (to increase variability in `z_image`)
-  - `NOISE_STD`: 0.1 (to add random noise to `z_image` for more diversity)
-- **Current Issue**: The generated images lack diversity, producing nearly identical outputs. This is being addressed by retraining the `ImageVAE` with a higher KLD.
-
-## Results
-
-- **Generated Images**: The pipeline successfully generates abstract art images from audio inputs, but the current outputs lack diversity (e.g., similar colors, textures, and compositions with only slight shape variations).
-- **Logs from Latest Generation**:
-  - Random audio indices: [2364, 1311, 6367, 6902, 1649, 1511, 7814, 1229, 2127, 553]
-  - Audio features show variability (e.g., mean range: 0.3979 to 0.8440, std range: 0.0914 to 0.1403).
-  - `z_audio` range: -3.4546 to 2.5047
-  - `z_image` range: -3.2771 to 2.8307
-  - Despite variability in the latent spaces, the generated images are nearly identical, indicating a bottleneck in the `ImageVAE`.
-
-## Future Improvements
-
-1. **Improve Diversity in Generated Images**:
-   - **Retrain `ImageVAE`**: Currently in progress with `MAX_BETA=4.0` and `KLD_WEIGHT=1.5` to increase the KLD (target: 6.0–7.0) and encourage a more diverse latent space.
-   - **Increase `ImageVAE` Decoder Capacity**: Add more layers or filters to the `ImageVAE` decoder to better capture variations in the latent space.
-   - **Retrain `MappingNetwork`**: Extend training to 200 epochs with a reduced scheduler `patience` of 10 to learn a more nuanced mapping.
-
-2. **Enhance Audio-to-Image Mapping**:
-   - Log more detailed audio features (e.g., tempo, pitch, energy) using Librosa to better understand the audio-to-image mapping.
-   - Fine-tune the `MappingNetwork` to ensure that variations in `z_audio` lead to more distinct `z_image` vectors.
-
-3. **Experiment with Generation Parameters**:
-   - Further increase `LOGVAR_SCALE` (e.g., to 3.0) and `NOISE_STD` (e.g., to 0.2) to introduce more variability in `z_image`, though this is a temporary workaround.
-   - Explore conditional generation techniques (e.g., conditioning the `ImageVAE` decoder on audio features directly).
-
-## Contributing
-
-Contributions are welcome! If you’d like to contribute, please:
-- Fork the repository.
-- Create a new branch for your feature or bug fix.
-- Submit a pull request with a detailed description of your changes.
-
-## License
-
-This project is licensed under the MIT License. See the `LICENSE` file for details.
-
-## Acknowledgments
-
-- Built with PyTorch and Torchvision.
-- Inspired by research on cross-modal generation and VAEs.
-- Thanks to the open-source community for providing tools and datasets.
+The core architecture consists of three interconnected PyTorch models:
+1. **AudioVAE**: Encodes raw audio features (22 channels across time steps) into a compressed latent representation.
+2. **ImageVAE**: Decodes latent vectors into 128x128 abstract art images (trained on a specialized abstract art dataset).
+3. **Mapping Network**: A sophisticated translation network connecting the Audio latent space to the Image latent space, trained using Cycle Consistency, Maximum Mean Discrepancy (MMD), and target Diversity constraints.
 
 ---
+
+## 🚀 Features
+
+- **Offline ML Pipeline**: Generate art entirely offline using local PyTorch model weights.
+- **Web Interface**: A sleek, interactive UI powered by **Streamlit**.
+- **Drag & Drop Upload**: Instantly process `.mp3` or `.wav` files.
+- **YouTube Support**: Paste any YouTube link to fetch the audio automatically via `yt-dlp` and generate corresponding art.
+
+---
+
+## 🛠️ Installation & Setup
+
+### 1. Requirements
+Ensure you have **Python 3.11** (or 3.12) installed on your system. 
+
+Clone the repository and install the dependencies:
+```bash
+# 1. Create a virtual environment
+python -m venv venv
+
+# 2. Activate the environment (Windows)
+.\venv\Scripts\activate
+
+# 3. Install required packages
+pip install -r requirements.txt
+```
+
+### 2. Pre-trained Weights
+The application requires the pre-trained weights for the autoencoders. Ensure the following files exist in the `tmodels/` directory:
+- `audio_vae.pth`
+- `image_vae.pth`
+- `mapping_network.pth`
+
+---
+
+## 💻 Usage
+
+### Launching the Web Application
+The easiest and recommended way to interact with the models is through the Streamlit UI.
+
+1. Activate your virtual environment:
+   ```bash
+   .\venv\Scripts\activate
+   ```
+2. Run the application:
+   ```bash
+   streamlit run app.py
+   ```
+3. Open your browser to `http://localhost:8501`. From here, you can upload audio files or paste YouTube links to see the generative process in action.
+
+---
+
+## 🧠 Deep-Dive: System Architecture & Methodology
+
+Synesthesia is driven by three primary neural network components, each serving a specific role in translating audio features into the visual domain.
+
+### 1. Audio Latent Encoding (`AudioVAE`)
+The `AudioVAE` is a 1D Convolutional Variational Autoencoder responsible for understanding musical characteristics.
+*   **Input Features**: The network ingests a fused tensor of shape `[Batch, 22, 216]`. The 22 channels comprise 20 Mel-Frequency Cepstral Coefficients (MFCCs), 1 Spectral Centroid channel, and 1 Root Mean Square (RMS) energy channel over 216 time steps.
+*   **Encoder Structure**: A 3-layer `Conv1d` network (kernel size 3, stride 2) compresses the temporal dimension, squeezing the audio features through `BatchNorm1d` and `ReLU` activations down to a flattened representation.
+*   **Latent Space**: The flattened tensor is mapped via fully connected layers to a highly compressed multivariate Gaussian distribution (represented by $\mu$ and $\log\sigma^2$, producing a robust latent dimensionality of `Z=512`).
+
+### 2. Image Latent Encoding (`ImageVAE`)
+The `ImageVAE` is a symmetric 2D Convolutional Autoencoder functioning as the "visual brain" of the application.
+*   **Input**: RGB Abstract Art images resized and normalized to `128x128`.
+*   **Encoder**: A deep 5-layer `Conv2d` stack progressively downsamples the spatial resolution (`128 -> 64 -> 32 -> 16 -> 8 -> 4`) while expanding channel capacity (up to 1024 filters).
+*   **Latent Space**: Like the Audio VAE, it projects its spatial embeddings into a shared latent dimensionality (`Z=512`), parameterizing $\mu$ and $\log\sigma^2$.
+*   **Decoder**: The generator. Using `ConvTranspose2d` layers, it upsamples the `Z=512` vector back into a `128x128x3` image. A final `Tanh` activation ensures the image bounds are dynamically constrained to `[-1, 1]` before denormalization.
+
+### 3. The Bridge: Latent Space Translation (`Mapping Network`)
+This is the core of the cross-modal generation. The `MappingNetwork` is tasked with taking a sequence of audio features ($Z_{audio}$) and accurately predicting what the corresponding visual ($Z_{image}$) should look like.
+
+*   **Conditioning**: The raw audio latent vector is concatenated with a condensed 3-dimensional deterministic audio "condition" vector (mean spectral centroid, mean RMS, and global track tempo).
+*   **Network Structure**: A deep Multi-Layer Perceptron (MLP) with consecutive 512-neuron `Linear` layers and `ReLU` activations maps the concatenated input to the target $Z_{image}$ distribution ($\mu_{mapped}, \log\sigma^2_{mapped}$).
+
+### 🧪 Advanced Training Constraints & Loss Functions
+
+Training the bridge between two entirely different modalities requires a highly constrained optimization landscape. `train_mapping_network.py` relies on a multi-objective loss function to guarantee stability:
+
+1.  **Inverse Mapping & Cycle Consistency ($L_{cycle}$)**: 
+    *   Alongside the forward `MappingNetwork`, an `InverseMappingNetwork` is trained simultaneously to map $Z_{image} \rightarrow Z_{audio}$. 
+    *   Cycle Consistency Loss enforces that if we map an audio track to an image, and then map that image *back* to an audio track, the result should equal the original audio track ($A \rightarrow I \rightarrow A' \approx A$). This prevents the mapping network from collapsing into outputting the exact same generic image for every song.
+2.  **Maximum Mean Discrepancy (MMD)**:
+    *   A kernel-based statistical test (using Gaussian RBF kernels) ensures that the *distribution* of mapped audio vectors ($Z_{mapped}$) closely matches the *distribution* of true image vectors ($Z_{image}$).
+3.  **Targeted Diversity Loss ($L_{div}$)**: 
+    *   To further combat mode-collapse (a common VAE issue where all generated images look identical), a diversity penalty repels batch samples from one another: $-E[||z_1 - z_2||]$. This forces the network to utilize the full extent of the 512-dimension space.
+4.  **KL Divergence ($L_{kl}$)**: 
+    *   Standard VAE regularization is applied with a warm-up schedule ($\beta$-annealing) to keep the mapped latent space continuous and uniformly distributed without overwhelming the Cycle Consistency and MMD losses early in training.
+
+---
+
+## 📁 Repository Map
+
+```text
+audio-to-image-generation/
+│
+├── app.py                      # Main Streamlit web application
+├── requirements.txt            # Dependency manifest
+│
+├── datasets/                   # Training data directory
+│   ├── audio_features/         
+│   └── abstract_art/           
+│
+├── scripts/
+│   ├── inference.py            # Headless inference logic used by the UI
+│   ├── extract_audio_features.py 
+│   ├── generate_image.py       # Legacy CLI generation script
+│   └── generate_image_from_mp3.py
+│
+├── models/
+│   └── autoencoder/
+│       ├── audio_vae.py        # 1D Conv architecture (Audio)
+│       ├── image_vae.py        # 2D Conv architecture (Images)
+│       ├── mapping_network.py  # Forward/Inverse MLP Translation
+│       └── datasets.py         # PyTorch DataLoader classes
+│
+├── training/                   # Model training scripts
+│   ├── train_audio_vae.py      
+│   ├── train_image_vae.py      
+│   └── train_mapping_network.py
+│
+├── tmodels/                    # Directory for PyTorch `.pth` weights
+└── generated_images/           # Output directory for locally saved CLI runs
+```
+
+---
+
+## 🔬 Training from Scratch
+
+If you are a researcher or developer looking to train the models from scratch:
+
+1. **Train Audio Latent Space**: `python training/train_audio_vae.py`
+2. **Train Image Latent Space**: `python training/train_image_vae.py`
+   *Note: Ensure your `datasets/abstract_art/` folder is populated with images before running this.*
+3. **Train the Translation Bridge**: `python training/train_mapping_network.py`
+   *This trains both the forward and inverse mapping networks using the multi-objective loss architecture (KL, Cycle, MMD) described above.*
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! If you’d like to contribute:
+1. Fork the repository.
+2. Create a semantic feature branch.
+3. Submit a pull request with a detailed description of your architectural changes.
+
+## 📄 License
+
+This project is open-source and available under the MIT License.
