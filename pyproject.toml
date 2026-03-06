@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "abstraction"
+version = "0.2.0"
+description = "Music-to-Image AI without text conditioning"
+authors = [
+  { name = "Arunav Ganguly", email = "arunav.ganguly@example.com" }
+]
+requires-python = ">=3.9"
+dependencies = [
+    "torch>=1.9.0",
+    "torchvision>=0.10.0",
+    "numpy>=1.21.0",
+    "librosa>=0.8.1",
+    "streamlit>=1.24.0",
+    "yt-dlp>=2023.7.6",
+    "pyyaml>=6.0",
+    "wandb>=0.15.0",
+    "laion-clap>=1.1.4"
+]
+
+[tool.setuptools.packages.find]
+include = ["models*", "preprocessing*", "scripts*", "training*", "visualization*"]

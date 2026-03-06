@@ -1,5 +1,7 @@
 import sys
 import os
+import yaml
+import wandb
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(BASE_DIR)
 
@@ -11,20 +13,31 @@ import torchvision.utils as vutils
 from models.autoencoder.image_vae import ImageVAE
 from models.autoencoder.datasets import ImageDataset
 
+# Load configuration
+config_path = os.path.join(BASE_DIR, "configs", "config.yaml")
+with open(config_path, "r") as f:
+    config = yaml.safe_load(f)
+
+sys_config = config['system']
+img_config = config['image_vae']
+
+# Initialize wandb
+wandb.init(project="abstraction", name="image_vae", config=config)
+
 # Paths
-IMAGE_PATH = os.path.join(BASE_DIR, "datasets", "abstract_art")
-IMAGE_MODEL_PATH = os.path.join(BASE_DIR, "tmodels", "image_vae.pth")
-OUTPUT_DIR = os.path.join(BASE_DIR, "datasets", "reconstructed_images")
+IMAGE_PATH = os.path.join(BASE_DIR, config['paths']['image_features'])
+IMAGE_MODEL_PATH = os.path.join(BASE_DIR, config['paths']['models_dir'], "image_vae.pth")
+OUTPUT_DIR = os.path.join(BASE_DIR, config['paths']['outputs_dir'])
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Hyperparameters
-LATENT_DIM = 512
-BATCH_SIZE = 8
-NUM_EPOCHS = 100
-LEARNING_RATE = 1e-4
-BETA = 0.005  # Small KL weight as in original
+LATENT_DIM = sys_config['latent_dim']
+BATCH_SIZE = img_config['batch_size']
+NUM_EPOCHS = img_config['num_epochs']
+LEARNING_RATE = float(img_config['learning_rate'])
+BETA = img_config['beta']  # Small KL weight as in original
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device(sys_config['device'] if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
 # Data loading
@@ -118,6 +131,15 @@ for epoch in range(NUM_EPOCHS):
     avg_style = total_style / len(dataloader)
     avg_kl = total_kl / len(dataloader)
     print(f"Epoch {epoch+1}/{NUM_EPOCHS}, Avg Loss: {avg_loss:.4f}, MSE: {avg_mse:.4f}, Style: {avg_style:.4f}, KL: {avg_kl:.4f}")
+
+    wandb.log({
+        "epoch": epoch + 1,
+        "loss": avg_loss,
+        "mse_loss": avg_mse,
+        "style_loss": avg_style,
+        "kl": avg_kl,
+        "lr": lr
+    })
 
 torch.save(image_vae.state_dict(), IMAGE_MODEL_PATH)
 print(f"✅ Saved trained ImageVAE to {IMAGE_MODEL_PATH}")

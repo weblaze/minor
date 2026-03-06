@@ -1,0 +1,34 @@
+# Centralized experiment config
+system:
+  latent_dim: 512
+  seed: 42
+  device: "cuda"
+
+audio_vae:
+  batch_size: 16
+  num_epochs: 100
+  learning_rate: 1.0e-3
+  beta: 0.005
+  input_channels: 22
+  time_steps: 216
+
+image_vae:
+  batch_size: 8
+  num_epochs: 100
+  learning_rate: 1.0e-4
+  beta: 0.005
+
+mapping_network:
+  batch_size: 16
+  num_epochs: 50
+  learning_rate: 1.0e-4
+  beta: 0.005
+  cycle_weight: 1.0
+  div_weight: 0.001
+  mmd_weight: 5.0
+
+paths:
+  audio_features: "datasets/audio_features"
+  image_features: "datasets/abstract_art"
+  models_dir: "tmodels"
+  outputs_dir: "datasets/reconstructed_images"

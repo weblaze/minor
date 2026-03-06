@@ -1,5 +1,7 @@
 import sys
 import os
+import yaml
+import wandb
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(BASE_DIR)
 import torch  # Moved to top
@@ -8,24 +10,34 @@ from torch.utils.data import DataLoader  # Moved to top
 from models.autoencoder.audio_vae import AudioVAE
 from models.autoencoder.datasets import AudioFeatureDataset
 
-# Dynamically set the base directory
+# Load configuration
+config_path = os.path.join(BASE_DIR, "configs", "config.yaml")
+with open(config_path, "r") as f:
+    config = yaml.safe_load(f)
 
+sys_config = config['system']
+audio_config = config['audio_vae']
+
+# Initialize wandb
+wandb.init(project="abstraction", name="audio_vae", config=config)
 
 # Paths
-AUDIO_FEATURES_PATH = os.path.join(BASE_DIR, "datasets", "audio_features")
-AUDIO_MODEL_PATH = os.path.join(BASE_DIR, "tmodels", "audio_vae.pth")
-OUTPUT_DIR = os.path.join(BASE_DIR, "tmodels")  # For saving samples
+AUDIO_FEATURES_PATH = os.path.join(BASE_DIR, config['paths']['audio_features'])
+AUDIO_MODEL_PATH = os.path.join(BASE_DIR, config['paths']['models_dir'], "audio_vae.pth")
+OUTPUT_DIR = os.path.join(BASE_DIR, config['paths']['models_dir'])  # For saving samples
 os.makedirs(OUTPUT_DIR, exist_ok=True)  # Ensure directory exists
 
 # Hyperparameters
-LATENT_DIM = 512
-BATCH_SIZE = 16
-NUM_EPOCHS = 100
-LEARNING_RATE = 1e-3
-BETA = 0.005
+LATENT_DIM = sys_config['latent_dim']
+BATCH_SIZE = audio_config['batch_size']
+NUM_EPOCHS = audio_config['num_epochs']
+LEARNING_RATE = float(audio_config['learning_rate'])
+BETA = audio_config['beta']
+INPUT_CHANNELS = audio_config['input_channels']
+TIME_STEPS = audio_config['time_steps']
 
 # Device
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device(sys_config['device'] if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
 # Dataset
@@ -40,7 +52,7 @@ except Exception as e:
 dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
 
 # Model
-audio_vae = AudioVAE(input_channels=22, time_steps=216, latent_dim=LATENT_DIM).to(device)
+audio_vae = AudioVAE(input_channels=INPUT_CHANNELS, time_steps=TIME_STEPS, latent_dim=LATENT_DIM).to(device)
 optimizer = torch.optim.Adam(audio_vae.parameters(), lr=LEARNING_RATE)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 
@@ -96,6 +108,13 @@ for epoch in range(NUM_EPOCHS):
     avg_recon_loss = total_recon_loss / len(dataloader.dataset)
     avg_kl = total_kl / len(dataloader.dataset)
     print(f"Epoch {epoch+1}/{NUM_EPOCHS}, Loss: {avg_loss:.4f}, Recon Loss: {avg_recon_loss:.4f}, KL: {avg_kl:.4f}")
+
+    wandb.log({
+        "epoch": epoch + 1,
+        "loss": avg_loss,
+        "recon_loss": avg_recon_loss,
+        "kl": avg_kl
+    })
 
 # Save model
 torch.save(audio_vae.state_dict(), AUDIO_MODEL_PATH)

@@ -1,5 +1,7 @@
 import sys
 import os
+import yaml
+import wandb
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(BASE_DIR)
 import torch
@@ -10,29 +12,38 @@ from models.autoencoder.image_vae import ImageVAE
 from models.autoencoder.mapping_network import MappingNetwork, InverseMappingNetwork
 from models.autoencoder.datasets import AudioFeatureDataset, ImageDataset
 
+# Load configuration
+config_path = os.path.join(BASE_DIR, "configs", "config.yaml")
+with open(config_path, "r") as f:
+    config = yaml.safe_load(f)
 
+sys_config = config['system']
+map_config = config['mapping_network']
+
+# Initialize wandb
+wandb.init(project="abstraction", name="mapping_network", config=config)
 
 # Paths
-AUDIO_FEATURES_PATH = os.path.join(BASE_DIR, "datasets", "audio_features")
-IMAGE_PATH = os.path.join(BASE_DIR, "datasets", "abstract_art")
-AUDIO_MODEL_PATH = os.path.join(BASE_DIR, "tmodels", "audio_vae.pth")
-IMAGE_MODEL_PATH = os.path.join(BASE_DIR, "tmodels", "image_vae.pth")
-MAPPING_MODEL_PATH = os.path.join(BASE_DIR, "tmodels", "mapping_network.pth")
-INVERSE_MAPPING_MODEL_PATH = os.path.join(BASE_DIR, "tmodels", "inverse_mapping_network.pth")
+AUDIO_FEATURES_PATH = os.path.join(BASE_DIR, config['paths']['audio_features'])
+IMAGE_PATH = os.path.join(BASE_DIR, config['paths']['image_features'])
+AUDIO_MODEL_PATH = os.path.join(BASE_DIR, config['paths']['models_dir'], "audio_vae.pth")
+IMAGE_MODEL_PATH = os.path.join(BASE_DIR, config['paths']['models_dir'], "image_vae.pth")
+MAPPING_MODEL_PATH = os.path.join(BASE_DIR, config['paths']['models_dir'], "mapping_network.pth")
+INVERSE_MAPPING_MODEL_PATH = os.path.join(BASE_DIR, config['paths']['models_dir'], "inverse_mapping_network.pth")
 os.makedirs(os.path.dirname(MAPPING_MODEL_PATH), exist_ok=True)
 
 # Hyperparameters
-LATENT_DIM = 512  # Matches updated VAEs
-BATCH_SIZE = 16  # Reduced from 32 for stability with larger latent dim
-NUM_EPOCHS = 50  # Increased from 10, matches older script
-LEARNING_RATE = 1e-4
-BETA = 0.005  # Reduced from 0.05, inspired by AudioVAE success
-CYCLE_WEIGHT = 1.0
-DIV_WEIGHT = 0.001  # Reduced from 0.01, gradual warm-up
-MMD_WEIGHT = 5.0
+LATENT_DIM = sys_config['latent_dim']
+BATCH_SIZE = map_config['batch_size']
+NUM_EPOCHS = map_config['num_epochs']
+LEARNING_RATE = float(map_config['learning_rate'])
+BETA = map_config['beta']
+CYCLE_WEIGHT = map_config['cycle_weight']
+DIV_WEIGHT = map_config['div_weight']
+MMD_WEIGHT = map_config['mmd_weight']
 
 # Device
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device(sys_config['device'] if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
 # Load datasets
@@ -216,6 +227,18 @@ for epoch in range(NUM_EPOCHS):
           f"Map Loss: {avg_loss_map:.4f}, KL Map: {avg_kl_map:.4f}, Cycle Audio: {avg_cycle_audio:.4f}, Div: {avg_div:.4f}, MMD: {avg_mmd:.4f}, "
           f"Inv Loss: {avg_loss_inv:.4f}, KL Inv: {avg_kl_inv:.4f}, Cycle Image: {avg_cycle_image:.4f}, "
           f"Batches Processed: {batches_processed}")
+
+    wandb.log({
+        "epoch": epoch + 1,
+        "map_loss": avg_loss_map,
+        "kl_map": avg_kl_map,
+        "cycle_audio": avg_cycle_audio,
+        "div": avg_div,
+        "mmd": avg_mmd,
+        "inv_loss": avg_loss_inv,
+        "kl_inv": avg_kl_inv,
+        "cycle_image": avg_cycle_image
+    })
 
 # Save the models
 torch.save(mapping_net.state_dict(), MAPPING_MODEL_PATH)

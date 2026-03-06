@@ -50,3 +50,10 @@ training/python
 .vscode/
 .idea/
 .spyderproject
+
+# Planning Files
+ABSTRACTION_MASTER.docx
+ABSTRACTION_MASTER.html
+ABSTRACTION_MASTER.md
+future_fixes_v0.1.0.md
+immediate_action.md
