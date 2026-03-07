@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
 
 class SinusoidalPositionEmbeddings(nn.Module):
     def __init__(self, dim):
@@ -22,10 +23,12 @@ class Block(nn.Module):
         self.time_mlp =  nn.Linear(time_emb_dim, out_ch)
         if up:
             self.conv1 = nn.Conv2d(2*in_ch, out_ch, 3, padding=1)
-            self.transform = nn.ConvTranspose2d(out_ch, out_ch, 4, 2, 1)
+            # Retain spatial dimensions, no up-sampling needed for a 4x4 grid testing UNet
+            self.transform = nn.Conv2d(out_ch, out_ch, 3, padding=1)
         else:
             self.conv1 = nn.Conv2d(in_ch, out_ch, 3, padding=1)
-            self.transform = nn.Conv2d(out_ch, out_ch, 4, 2, 1)
+            # Retain spatial dimensions, no down-sampling needed
+            self.transform = nn.Conv2d(out_ch, out_ch, 3, padding=1)
         self.conv2 = nn.Conv2d(out_ch, out_ch, 3, padding=1)
         self.bnorm1 = nn.BatchNorm2d(out_ch)
         self.bnorm2 = nn.BatchNorm2d(out_ch)

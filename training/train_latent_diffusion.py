@@ -96,9 +96,9 @@ print("Loading Image VAE...")
 image_vae = ImageVAE(latent_dim=sys_config['latent_dim']).to(device)
 try:
     image_vae.load_state_dict(torch.load(IMAGE_MODEL_PATH, map_location=device))
-    print("✅ Loaded Pre-trained Image VAE weights!")
+    print("[SUCCESS] Loaded Pre-trained Image VAE weights!")
 except FileNotFoundError:
-    print("⚠️ Pre-trained Image VAE not found. Using untrained weights for structural test.")
+    print("[WARNING] Pre-trained Image VAE not found. Using untrained weights for structural test.")
 
 image_vae.eval()
 for param in image_vae.parameters():
@@ -179,11 +179,11 @@ def train_loop():
         
     # Save the model
     torch.save(unet.state_dict(), LDM_MODEL_PATH)
-    print(f"✅ Saved trained Latent Diffusion UNet to {LDM_MODEL_PATH}")
+    print(f"[SUCCESS] Saved trained Latent Diffusion UNet to {LDM_MODEL_PATH}")
 
 if __name__ == "__main__":
     if len(dataset) == 0:
-        print("⚠️ Waiting for extracted CLAP features (.npy) to begin training.")
+        print("[WARNING] Waiting for extracted CLAP features (.npy) to begin training.")
         print("Please run `python preprocessing/extract_clap_features.py` natively first.")
     else:
         print("Starting Latent Diffusion Training...")
