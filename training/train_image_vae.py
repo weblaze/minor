@@ -2,6 +2,7 @@ import sys
 import os
 import yaml
 import wandb
+import signal
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(BASE_DIR)
 
@@ -22,7 +23,9 @@ sys_config = config['system']
 img_config = config['image_vae']
 
 # Initialize wandb
+print("Initializing wandb...", flush=True)
 wandb.init(project="abstraction", name="image_vae", config=config)
+print("wandb initialized.", flush=True)
 
 # Paths
 IMAGE_PATH = os.path.join(BASE_DIR, config['paths']['image_features'])
@@ -41,19 +44,45 @@ device = torch.device(sys_config['device'] if torch.cuda.is_available() else "cp
 print(f"Using device: {device}")
 
 # Data loading
+print(f"Loading dataset from: {IMAGE_PATH}", flush=True)
 dataset = ImageDataset(IMAGE_PATH, train=True)
 dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
-print(f"Loaded {len(dataset)} image files.")
+print(f"Loaded {len(dataset)} image files.", flush=True)
 
 # Model and optimizer
-image_vae = ImageVAE(latent_dim=LATENT_DIM).to(device)
+latent_channels = config['latent_diffusion'].get('latent_channels', 8)
+image_vae = ImageVAE(latent_channels=latent_channels).to(device)
 optimizer_vae = torch.optim.Adam(image_vae.parameters(), lr=LEARNING_RATE, betas=(0.5, 0.999))
 scheduler_vae = torch.optim.lr_scheduler.StepLR(optimizer_vae, step_size=20, gamma=0.5)
 
+# --- Resume Logic ---
+start_epoch = 0
+if os.path.exists(IMAGE_MODEL_PATH):
+    print(f"Found existing checkpoint at {IMAGE_MODEL_PATH}. Resuming...", flush=True)
+    try:
+        image_vae.load_state_dict(torch.load(IMAGE_MODEL_PATH, map_location=device, weights_only=False))
+        # Note: In a full implementation, we'd also load the optimizer/scheduler state
+        # For now, we'll just resume the weights.
+        print("Successfully loaded weights.", flush=True)
+    except Exception as e:
+        print(f"Failed to load checkpoint (likely incompatible architecture): {e}", flush=True)
+        print("Starting training from scratch with latest architecture.", flush=True)
+
+# --- Signal Handling for Safe Exit ---
+def signal_handler(sig, frame):
+    print("\nInterrupt received! Saving current model state...", flush=True)
+    torch.save(image_vae.state_dict(), IMAGE_MODEL_PATH)
+    print(f"Saved to {IMAGE_MODEL_PATH}. Exiting gracefully.", flush=True)
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
+
 # VGG16 for style loss
+print("Loading VGG16 weights (this may take a while on first run)...", flush=True)
 vgg = models.vgg16(weights=models.VGG16_Weights.IMAGENET1K_V1).features.to(device).eval()
 for param in vgg.parameters():
     param.requires_grad = False
+print("VGG16 loaded.", flush=True)
 
 vgg_preprocess = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
@@ -86,8 +115,21 @@ def vae_loss(recon_x, x, mu, logvar, beta=BETA):
     return mse_loss + 20.0 * style_loss_val + beta * kl_div, mse_loss, style_loss_val, kl_div
 
 # Training loop
+print(f"Starting training on {device} for {NUM_EPOCHS} epochs...", flush=True)
 image_vae.train()
-for epoch in range(NUM_EPOCHS):
+for epoch in range(start_epoch, NUM_EPOCHS):
+    # Dynamically re-read config to allow changing num_epochs while running
+    try:
+        with open(config_path, "r") as f:
+            current_config = yaml.safe_load(f)
+            NUM_EPOCHS = current_config['image_vae']['num_epochs']
+    except Exception:
+        pass
+
+    if epoch >= NUM_EPOCHS:
+        print(f"Reached target epoch {NUM_EPOCHS}. Finishing training.", flush=True)
+        break
+
     total_loss, total_mse, total_style, total_kl = 0, 0, 0, 0
     
     # Warm-up phase for KL loss
@@ -140,6 +182,11 @@ for epoch in range(NUM_EPOCHS):
         "kl": avg_kl,
         "lr": lr
     })
+
+    # Save checkpoint every 10 epochs
+    if (epoch + 1) % 10 == 0 or (epoch + 1) == NUM_EPOCHS:
+        torch.save(image_vae.state_dict(), IMAGE_MODEL_PATH)
+        print(f"--- Checkpoint saved at Epoch {epoch+1} ---", flush=True)
 
 torch.save(image_vae.state_dict(), IMAGE_MODEL_PATH)
 print(f"✅ Saved trained ImageVAE to {IMAGE_MODEL_PATH}")

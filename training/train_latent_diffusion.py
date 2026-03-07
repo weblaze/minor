@@ -93,7 +93,7 @@ print(f"Loaded {len(dataset)} paired samples.")
 
 print("Loading Image VAE...")
 # Freeze Image VAE and keep in eval mode. We ONLY train the UNet.
-image_vae = ImageVAE(latent_dim=sys_config['latent_dim']).to(device)
+image_vae = ImageVAE(latent_channels=ldm_config['latent_channels']).to(device)
 try:
     image_vae.load_state_dict(torch.load(IMAGE_MODEL_PATH, map_location=device))
     print("[SUCCESS] Loaded Pre-trained Image VAE weights!")
@@ -114,7 +114,10 @@ print("Initializing Diffusion UNet...")
 # for THIS specific diffusion test, we will diffuse a flattened 512D vector, requiring a 1D UNet or MLP,
 # OR we reshape it back into a spatial grid. 
 # Let's reshape 512 -> 32x4x4 for a mini 2D UNet to diffuse.
-SPATIAL_C, SPATIAL_H, SPATIAL_W = 32, 4, 4 
+# Latent dimensions from config
+SPATIAL_C = ldm_config.get('latent_channels', 8)
+SPATIAL_S = ldm_config.get('spatial_size', 16)
+SPATIAL_H = SPATIAL_W = SPATIAL_S
 
 unet = ConditionalUNet(
     in_channels=SPATIAL_C, 
@@ -139,12 +142,12 @@ def train_loop():
             
             # 1. Encode image to latent space (no gradients)
             with torch.no_grad():
-                # The Image VAE outputs mu, logvar for the 512 flat dim
+                # The Image VAE v2 outputs mu, logvar in spatial format [Batch, 8, 16, 16]
                 mu, logvar, _ = image_vae.encode(images)
-                z = image_vae.reparameterize(mu, logvar) # [Batch, 512]
+                z = image_vae.reparameterize(mu, logvar)
             
-            # 2. Reshape [Batch, 512] into [Batch, 32, 4, 4] for the spatial UNet
-            z_spatial = z.view(-1, SPATIAL_C, SPATIAL_H, SPATIAL_W)
+            # 2. Latent is already in spatial form [Batch, 8, 16, 16]
+            z_spatial = z
             
             # 3. Sample random noise to add to the latents
             noise = torch.randn_like(z_spatial)
@@ -174,8 +177,14 @@ def train_loop():
                  print(f"Epoch {epoch}/{epochs} | Step Loss: {loss.item():.4f}")
                  
         avg_loss = epoch_loss / len(dataloader)
-        print(f"Epoch {epoch}/{epochs} | Avg Loss: {avg_loss:.4f}")
+        print(f"Epoch {epoch}/{epochs} | Avg Loss: {avg_loss:.4f}", flush=True)
         wandb.log({"epoch": epoch, "loss": avg_loss})
+        
+        # Save checkpoint every 10 epochs
+        if (epoch + 1) % 10 == 0 or (epoch + 1) == epochs:
+            checkpoint_path = LDM_MODEL_PATH
+            torch.save(unet.state_dict(), checkpoint_path)
+            print(f"--- Checkpoint saved at Epoch {epoch+1} ---", flush=True)
         
     # Save the model
     torch.save(unet.state_dict(), LDM_MODEL_PATH)

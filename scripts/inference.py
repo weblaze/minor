@@ -1,108 +1,124 @@
 import os
 import torch
-import librosa
+import torch.nn as nn
 import numpy as np
+import laion_clap
+from PIL import Image
+import yaml
 
-from models.autoencoder.audio_vae import AudioVAE
+from models.diffusion.unet import ConditionalUNet
+from models.diffusion.scheduler import DDPMScheduler
 from models.autoencoder.image_vae import ImageVAE
-from models.autoencoder.mapping_network import MappingNetwork
 
-LATENT_DIM = 512
-CHANNELS = 22
-TIME_STEPS = 216
-LOGVAR_SCALE = 1.0
-OUTPUT_SCALE = 1.0
+# Load centralized config
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+config_path = os.path.join(BASE_DIR, "configs", "config.yaml")
+with open(config_path, "r") as f:
+    config = yaml.safe_load(f)
 
-# Using CUDA if available
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+LATENT_DIM = config['system']['latent_dim']
+DEVICE = torch.device(config['system']['device'] if torch.cuda.is_available() else "cpu")
+SPATIAL_C = config['latent_diffusion'].get('latent_channels', 8)
+SPATIAL_H = SPATIAL_W = config['latent_diffusion'].get('spatial_size', 16)
 
 def load_models(base_dir):
-    """Loads and returns the AudioVAE, ImageVAE, and MappingNetwork models."""
-    AUDIO_MODEL_PATH = os.path.join(base_dir, "tmodels", "audio_vae.pth")
+    """Loads and returns the CLAP module, Diffusion UNet, and ImageVAE."""
+    # Weights paths
+    CLAP_CKPT = os.path.join(base_dir, "music_audioset_epoch_15_esc_90.14.pt")
+    LDM_MODEL_PATH = os.path.join(base_dir, "tmodels", "latent_diffusion.pth")
     IMAGE_MODEL_PATH = os.path.join(base_dir, "tmodels", "image_vae.pth")
-    MAPPING_MODEL_PATH = os.path.join(base_dir, "tmodels", "mapping_network.pth")
 
-    audio_vae = AudioVAE(input_channels=CHANNELS, time_steps=TIME_STEPS, latent_dim=LATENT_DIM).to(device)
-    image_vae = ImageVAE(latent_dim=LATENT_DIM).to(device)
-    mapping_net = MappingNetwork(audio_latent_dim=LATENT_DIM, image_latent_dim=LATENT_DIM, condition_dim=3).to(device)
+    print(f"Loading CLAP on {DEVICE}...")
+    clap_model = laion_clap.CLAP_Module(enable_fusion=False, amodel='HTSAT-base')
+    clap_model.load_ckpt(CLAP_CKPT)
+    clap_model = clap_model.to(DEVICE)
+    clap_model.eval()
+    print("[LOG] CLAP Loaded.")
 
-    try:
-        audio_vae.load_state_dict(torch.load(AUDIO_MODEL_PATH, map_location=device))
-        image_vae.load_state_dict(torch.load(IMAGE_MODEL_PATH, map_location=device))
-        mapping_net.load_state_dict(torch.load(MAPPING_MODEL_PATH, map_location=device))
-    except Exception as e:
-        print(f"Error loading weights: {e}")
-        print("Falling back to partial loading...")
-        audio_vae.load_state_dict(torch.load(AUDIO_MODEL_PATH, map_location=device), strict=False)
-        image_vae.load_state_dict(torch.load(IMAGE_MODEL_PATH, map_location=device), strict=False)
-        mapping_net.load_state_dict(torch.load(MAPPING_MODEL_PATH, map_location=device), strict=False)
-
-    audio_vae.eval()
+    print(f"Loading Image VAE...")
+    image_vae = ImageVAE(latent_dim=LATENT_DIM).to(DEVICE)
+    if os.path.exists(IMAGE_MODEL_PATH):
+        image_vae.load_state_dict(torch.load(IMAGE_MODEL_PATH, map_location=DEVICE))
+        print("[LOG] VAE Loaded.")
     image_vae.eval()
-    mapping_net.eval()
-    
-    return audio_vae, image_vae, mapping_net
 
-def extract_audio_features(mp3_path_or_bytes, sr=22050, n_mfcc=20, hop_length=512, target_time_steps=216):
-    """Extracts features from an audio file and formats them for the model."""
-    audio, sr = librosa.load(mp3_path_or_bytes, sr=sr)
-    
-    mfccs = librosa.feature.mfcc(y=audio, sr=sr, n_mfcc=n_mfcc, hop_length=hop_length)
-    spectral_centroid = librosa.feature.spectral_centroid(y=audio, sr=sr, hop_length=hop_length)
-    rms = librosa.feature.rms(y=audio, hop_length=hop_length)
-    tempo, _ = librosa.beat.beat_track(y=audio, sr=sr, hop_length=hop_length)
-    
-    current_time_steps = mfccs.shape[1]
-    if current_time_steps > target_time_steps:
-        mfccs = mfccs[:, :target_time_steps]
-        spectral_centroid = spectral_centroid[:, :target_time_steps]
-        rms = rms[:, :target_time_steps]
-    elif current_time_steps < target_time_steps:
-        pad_width = target_time_steps - current_time_steps
-        mfccs = np.pad(mfccs, ((0, 0), (0, pad_width)), mode='constant', constant_values=0)
-        spectral_centroid = np.pad(spectral_centroid, ((0, 0), (0, pad_width)), mode='constant', constant_values=0)
-        rms = np.pad(rms, ((0, 0), (0, pad_width)), mode='constant', constant_values=0)
-    
-    mfccs = (mfccs - np.mean(mfccs)) / (np.std(mfccs) + 1e-8)
-    spectral_centroid = spectral_centroid / 4000.0
-    rms = (rms - np.mean(rms)) / (np.std(rms) + 1e-8)
-    tempo = (tempo - 60) / (200 - 60)
-    
-    mfccs_tensor = torch.tensor(mfccs, dtype=torch.float32).unsqueeze(0)
-    spectral_centroid_tensor = torch.tensor(spectral_centroid, dtype=torch.float32).unsqueeze(0)
-    rms_tensor = torch.tensor(rms, dtype=torch.float32).unsqueeze(0)
-    tempo_tensor = torch.tensor(np.array([tempo]), dtype=torch.float32)
-    
-    audio_features = torch.cat([mfccs_tensor, spectral_centroid_tensor, rms_tensor], dim=1)
-    condition = torch.stack([
-        spectral_centroid_tensor.mean(dim=2).squeeze(1),
-        rms_tensor.mean(dim=2).squeeze(1),
-        tempo_tensor.squeeze(0)
-    ], dim=1)
-    
-    return audio_features, condition
+    print(f"Loading Diffusion UNet...")
+    unet = ConditionalUNet(
+        in_channels=SPATIAL_C, 
+        out_channels=SPATIAL_C, 
+        time_emb_dim=config['latent_diffusion']['time_emb_dim'],
+        condition_dim=512
+    ).to(DEVICE)
+    if os.path.exists(LDM_MODEL_PATH):
+        unet.load_state_dict(torch.load(LDM_MODEL_PATH, map_location=DEVICE))
+        print("[LOG] UNet Loaded.")
+    unet.eval()
 
-def generate_image_from_audio(audio_features, condition, audio_vae, mapping_net, image_vae):
-    """Passes audio features through the pipeline to generate an image."""
-    audio_features = audio_features.to(device)
-    condition = condition.to(device)
-    
+    # Scheduler instance for inference
+    scheduler = DDPMScheduler(
+        num_train_timesteps=config['latent_diffusion']['num_train_timesteps']
+    )
+    scheduler.set_device(DEVICE)
+
+    return clap_model, unet, image_vae, scheduler
+
+def extract_audio_embedding(clap_model, audio_path):
+    """Extracts 512D CLAP embedding from an audio file."""
     with torch.no_grad():
-        mu_audio, logvar_audio, _ = audio_vae.encode(audio_features)
-        z_audio = audio_vae.reparameterize(mu_audio, logvar_audio)
+        # get_audio_embedding_from_filelist returns list of embeddings
+        embed = clap_model.get_audio_embedding_from_filelist(x=[audio_path], use_tensor=True)
+    return embed # [1, 512]
+
+def generate_diffusion(clap_model, unet, image_vae, scheduler, audio_path=None, num_steps=50, progress_callback=None):
+    """
+    Generates an image from audio using the Latent Diffusion process.
+    If audio_path is None, it runs in "Dream Mode" (null conditioning).
+    """
+    # 1. Prepare Conditioning
+    if audio_path:
+        print(f"[LOG] Extracting audio embedding for {audio_path}...")
+        conditioning = extract_audio_embedding(clap_model, audio_path).to(DEVICE)
+        print("[LOG] Conditioning vector extracted.")
+    else:
+        # Dreaming Mode: Null conditioning (zero vector)
+        print("[LOG] Entering Dreaming Mode (Null conditioning).")
+        conditioning = torch.zeros((1, 512), device=DEVICE)
+
+    # 2. Sample initial noise [1, 32, 4, 4]
+    latents = torch.randn((1, SPATIAL_C, SPATIAL_H, SPATIAL_W), device=DEVICE)
     
+    # 3. Setup timesteps for inference (linear spread)
+    total_train_steps = config['latent_diffusion']['num_train_timesteps']
+    # We work backwards from T to 0
+    inference_timesteps = np.linspace(total_train_steps - 1, 0, num_steps).astype(int)
+    
+    print(f"[LOG] Starting denoising loop for {num_steps} steps...")
+    # 4. Denoising Loop
     with torch.no_grad():
-        mapped_mu, mapped_logvar = mapping_net(z_audio, condition)
-        mapped_logvar = torch.clamp(mapped_logvar * LOGVAR_SCALE, min=-10, max=10)
-        z_image = mapping_net.reparameterize(mapped_mu, mapped_logvar)
-    
+        for i, t in enumerate(inference_timesteps):
+            t_tensor = torch.tensor([t], device=DEVICE).long()
+            
+            # Predict noise residual
+            noise_pred = unet(latents, t_tensor, conditioning)
+            
+            # Step scheduler to get previous sample
+            latents = scheduler.step(noise_pred, t, latents)
+            
+            # Progress update
+            if progress_callback:
+                progress_callback(int((i + 1) / num_steps * 100))
+    print("[LOG] Denoising complete.")
+
+    # 5. Decode Latent to Image
+    print("[LOG] Decoding latent to pixel space...")
     with torch.no_grad():
-        generated_image = image_vae.decode(z_image)
-        generated_image = torch.clamp(generated_image * OUTPUT_SCALE, -1, 1)
-    
-    if torch.isnan(generated_image).any() or torch.isinf(generated_image).any():
-        generated_image = torch.nan_to_num(generated_image, nan=0.0, posinf=1.0, neginf=-1.0)
-    
-    # Scale to [0, 1] for image saving/display
-    generated_image = (generated_image + 1) / 2
-    return generated_image
+        # Flatten 32*4*4 back to 512 for the Linear-based ImageVAE decoder
+        z_flat = latents.view(1, -1) 
+        output_image = image_vae.decode(z_flat)
+        print("[LOG] Decoding complete.")
+        
+        # Post-process: [-1, 1] to [0, 1]
+        output_image = (output_image + 1) / 2
+        output_image = torch.clamp(output_image, 0, 1)
+
+    return output_image

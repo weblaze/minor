@@ -47,3 +47,41 @@ class DDPMScheduler:
 
         noisy_samples = sqrt_alpha_prod * original_samples + sqrt_one_minus_alpha_prod * noise
         return noisy_samples
+
+    def step(self, model_output, timestep, sample):
+        """
+        Backward process: q(x_{t-1} | x_t, x_0)
+        Computes the previous sample x_{t-1} from the current sample x_t and predicted noise.
+        """
+        t = timestep
+        prev_t = t - 1
+
+        alpha_prod_t = self.alphas_cumprod[t]
+        alpha_prod_t_prev = self.alphas_cumprod_prev[t]
+        beta_prod_t = 1 - alpha_prod_t
+        beta_prod_t_prev = 1 - alpha_prod_t_prev
+        current_alpha_t = alpha_prod_t / alpha_prod_t_prev
+        current_beta_t = 1 - current_alpha_t
+
+        # 1. Compute predicted original sample (x_0 estimation)
+        # x_0 = (x_t - sqrt(1 - alpha_t) * noise) / sqrt(alpha_t)
+        pred_original_sample = (sample - torch.sqrt(beta_prod_t) * model_output) / torch.sqrt(alpha_prod_t)
+
+        # 2. Compute coefficients for x_0 and x_t
+        # Sample x_{t-1} from q(x_{t-1} | x_t, x_0)
+        pred_original_sample_coeff = (torch.sqrt(alpha_prod_t_prev) * current_beta_t) / beta_prod_t
+        current_sample_coeff = (torch.sqrt(current_alpha_t) * beta_prod_t_prev) / beta_prod_t
+
+        # 3. Compute predicted previous sample mean
+        pred_prev_sample = pred_original_sample_coeff * pred_original_sample + current_sample_coeff * sample
+
+        # 4. Add noise (variance)
+        variance = 0
+        if t > 0:
+            noise = torch.randn_like(model_output)
+            # Use fixed-large variance (simplified)
+            variance = torch.sqrt(current_beta_t) * noise
+
+        pred_prev_sample = pred_prev_sample + variance
+
+        return pred_prev_sample

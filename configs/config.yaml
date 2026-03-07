@@ -14,7 +14,7 @@ audio_vae:
 
 image_vae:
   batch_size: 8
-  num_epochs: 100
+  num_epochs: 40
   learning_rate: 1.0e-4
   beta: 0.005
 
@@ -28,11 +28,13 @@ mapping_network:
   mmd_weight: 5.0
 
 latent_diffusion:
-  batch_size: 8
-  num_epochs: 500
+  batch_size: 4  # Reduced batch size for 16x16 on GTX 1650
+  num_epochs: 50
   learning_rate: 1.0e-4
   time_emb_dim: 128
   num_train_timesteps: 1000
+  latent_channels: 8
+  spatial_size: 16
 
 paths:
   audio_features: "datasets/audio_features"
