@@ -56,3 +56,27 @@ class ImageVAE(nn.Module):
         mu, logvar, skips = self.encode(x)
         z = self.reparameterize(mu, logvar)
         return self.decode(z), mu, logvar
+
+
+class ConditionedImageVAE(ImageVAE):
+    """ImageVAE whose decoder is conditioned on a CLAP audio embedding.
+
+    Only adds `cond_proj` on top of ImageVAE, so a plain image_vae.pth
+    checkpoint warm-starts with strict=False and every original weight is
+    reused (FiLM-style additive bias after decoder_input).
+    """
+
+    def __init__(self, latent_channels=8, cond_dim=512):
+        super().__init__(latent_channels=latent_channels)
+        self.cond_proj = nn.Linear(cond_dim, 128)
+
+    def decode(self, z, cond=None, skips=None):
+        h = self.decoder_input(z)
+        if cond is not None:
+            h = h + self.cond_proj(cond)[:, :, None, None]
+        return self.decoder(h)
+
+    def forward(self, x, cond=None):
+        mu, logvar, skips = self.encode(x)
+        z = self.reparameterize(mu, logvar)
+        return self.decode(z, cond=cond), mu, logvar

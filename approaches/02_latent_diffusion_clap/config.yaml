@@ -1,0 +1,31 @@
+approach: "02_latent_diffusion_clap"
+
+vae:
+  kind: "own"          # own = your ImageVAE | sd = pretrained Stable Diffusion VAE (diffusers)
+  latent_channels: 8   # 8 for own, ignored for sd (always 4)
+
+cond:
+  source: "clap"       # clap | byol_a (approach 03 swaps this)
+  dim: 512
+
+latent_diffusion:
+  batch_size: 16
+  num_epochs: 200
+  learning_rate: 1.0e-4
+  time_emb_dim: 128
+  num_train_timesteps: 1000
+  cfg_dropout: 0.1     # probability of replacing conditioning with zeros (enables dreaming)
+
+sampling:
+  num_steps: 50
+  guidance_scale: 3.0
+
+pairing:
+  strategy: "pseudo"   # pseudo (mood-vocabulary bridge) | random (baseline)
+  top_k: 3             # sample the image from the K nearest mood matches
+
+paths:
+  image_vae_checkpoint: "tmodels/01_conditioned_autoencoder/image_vae.pth"
+  unet_checkpoint: "tmodels/02_latent_diffusion_clap/unet_own.pth"
+  pairs_file: "datasets/pairs_02.json"
+  latents_dir: "datasets/latents_02/own"

@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import math
 
 class SinusoidalPositionEmbeddings(nn.Module):
@@ -69,37 +68,12 @@ class ConditionalUNet(nn.Module):
         self.final_conv = nn.Conv2d(in_channels, out_channels, 1)
 
     def forward(self, x, t, condition):
-        t = self.time_mlp(t)
-        c = self.cond_mlp(condition)
-        t_c = t + c
+        t_c = self.time_mlp(t) + self.cond_mlp(condition)
 
-        # Down
-        h1 = self.down1(x, t_c)   # 8x8
-        h2 = self.down2(h1, t_c)  # 4x4
-        
-        # Up
-        x = self.up1(h2, t_c)     # 8x8
-        x = torch.cat((x, h1), dim=1) # Note: Block up expects 2*in_ch
-        # Oops, my Block logic for Up is 2*in_ch. 
-        # Let's fix the cat/up flow.
-        # Actually my up1 input is 128, which matches down2 output.
-        # But h1 is 64. So cat(up1_out, h1) is 64+64=128.
-        # Let's make it cleaner.
-        
-        # Re-implement forward for clarity
-        return self.refined_forward(x, t_c, h1, h2)
+        h1 = self.down1(x, t_c)        # [B, 64, 8, 8]
+        h2 = self.down2(h1, t_c)       # [B, 128, 4, 4]
 
-    def refined_forward(self, x, t_c, h1, h2):
-        # Already did down
-        # h1: [B, 64, 8, 8]
-        # h2: [B, 128, 4, 4]
-        
-        x = self.up1(h2, t_c) # Output: [B, 64, 8, 8]
-        x = torch.cat((x, h1), dim=1) # [B, 128, 8, 8]
-        
-        # Wait, Block(up=True) for up2 needs to handle the cat.
-        # My Block init: self.conv1 = nn.Conv2d(2*in_ch, out_ch, ...)
-        # So up2 should be Block(64, in_channels, ..., up=True) -> 2*64 = 128 input. Correct.
-        
-        x = self.up2(x, t_c) # Output: [B, in_channels, 16, 16]
+        x = self.up1(h2, t_c)          # [B, 64, 8, 8]
+        x = torch.cat((x, h1), dim=1)  # [B, 128, 8, 8]
+        x = self.up2(x, t_c)           # [B, in_channels, 16, 16]
         return self.final_conv(x)
