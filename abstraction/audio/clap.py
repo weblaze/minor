@@ -35,3 +35,9 @@ class ClapEncoder:
                 x=[str(p) for p in audio_paths], use_tensor=False
             )
         return np.asarray(embeds)
+
+    def embed_texts(self, texts):
+        """Returns a [N, 512] numpy array of CLAP text embeddings."""
+        with torch.no_grad():
+            embeds = self.model.get_text_embedding(texts, use_tensor=False)
+        return np.asarray(embeds)

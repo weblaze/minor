@@ -66,7 +66,7 @@ class SDVAECodec:
 def build_codec(config, device):
     kind = config["vae"]["kind"]
     if kind == "own":
-        ckpt = config["vae"].get("checkpoint")
+        ckpt = config["paths"].get("image_vae_checkpoint")
         latent_channels = config["vae"].get("latent_channels", 8)
         return OwnVAECodec(ckpt, latent_channels, device)
     if kind == "sd":
