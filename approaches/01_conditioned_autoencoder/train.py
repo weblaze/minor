@@ -1,90 +1,36 @@
-import sys
-import os
-import yaml
-import wandb
-import signal
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-sys.path.append(BASE_DIR)
+"""Two-stage training that stamps the original autoencoder approach complete.
+
+Stage pretrain — plain ImageVAE on the abstract-art set (MSE + VGG16 style
+loss + KL with warm-up). This is the original v0.2 trainer, modularized.
+
+Stage finetune — ConditionedImageVAE warm-started from the pretrain checkpoint
+(only cond_proj is new). The decoder learns to use CLAP audio embeddings from
+the pairs file, with conditioning dropped at cond_dropout so unconditioned
+decoding keeps working. 10-20 epochs is enough — see the 2026 stress-test doc.
+
+Usage:
+  python train.py --stage pretrain [--epochs N] [--max-steps N] [--no-wandb]
+  python train.py --stage finetune [--epochs N] [--max-steps N] [--no-wandb]
+"""
+import argparse
+from pathlib import Path
 
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from torchvision import transforms, models
-import torchvision.utils as vutils
-from models.autoencoder.image_vae import ImageVAE
-from models.autoencoder.datasets import ImageDataset
+from torchvision import models, transforms
 
-# Load configuration
-config_path = os.path.join(BASE_DIR, "configs", "config.yaml")
-with open(config_path, "r") as f:
-    config = yaml.safe_load(f)
+from abstraction.data.datasets import ClapImageDataset, ImageDataset
+from abstraction.models.image_vae import ConditionedImageVAE, ImageVAE
+from abstraction.utils.checkpoints import save_checkpoint, warm_start
+from abstraction.utils.config import load_config
+from abstraction.utils.wandb_utils import init_wandb
 
-sys_config = config['system']
-img_config = config['image_vae']
+APPROACH = "01_conditioned_autoencoder"
 
-# Initialize wandb
-print("Initializing wandb...", flush=True)
-wandb.init(project="abstraction", name="image_vae", config=config)
-print("wandb initialized.", flush=True)
-
-# Paths
-IMAGE_PATH = os.path.join(BASE_DIR, config['paths']['image_features'])
-IMAGE_MODEL_PATH = os.path.join(BASE_DIR, config['paths']['models_dir'], "image_vae.pth")
-OUTPUT_DIR = os.path.join(BASE_DIR, config['paths']['outputs_dir'])
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-# Hyperparameters
-LATENT_DIM = sys_config['latent_dim']
-BATCH_SIZE = img_config['batch_size']
-NUM_EPOCHS = img_config['num_epochs']
-LEARNING_RATE = float(img_config['learning_rate'])
-BETA = img_config['beta']  # Small KL weight as in original
-
-device = torch.device(sys_config['device'] if torch.cuda.is_available() else "cpu")
-print(f"Using device: {device}")
-
-# Data loading
-print(f"Loading dataset from: {IMAGE_PATH}", flush=True)
-dataset = ImageDataset(IMAGE_PATH, train=True)
-dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
-print(f"Loaded {len(dataset)} image files.", flush=True)
-
-# Model and optimizer
-latent_channels = config['latent_diffusion'].get('latent_channels', 8)
-image_vae = ImageVAE(latent_channels=latent_channels).to(device)
-optimizer_vae = torch.optim.Adam(image_vae.parameters(), lr=LEARNING_RATE, betas=(0.5, 0.999))
-scheduler_vae = torch.optim.lr_scheduler.StepLR(optimizer_vae, step_size=20, gamma=0.5)
-
-# --- Resume Logic ---
-start_epoch = 0
-if os.path.exists(IMAGE_MODEL_PATH):
-    print(f"Found existing checkpoint at {IMAGE_MODEL_PATH}. Resuming...", flush=True)
-    try:
-        image_vae.load_state_dict(torch.load(IMAGE_MODEL_PATH, map_location=device, weights_only=False))
-        # Note: In a full implementation, we'd also load the optimizer/scheduler state
-        # For now, we'll just resume the weights.
-        print("Successfully loaded weights.", flush=True)
-    except Exception as e:
-        print(f"Failed to load checkpoint (likely incompatible architecture): {e}", flush=True)
-        print("Starting training from scratch with latest architecture.", flush=True)
-
-# --- Signal Handling for Safe Exit ---
-def signal_handler(sig, frame):
-    print("\nInterrupt received! Saving current model state...", flush=True)
-    torch.save(image_vae.state_dict(), IMAGE_MODEL_PATH)
-    print(f"Saved to {IMAGE_MODEL_PATH}. Exiting gracefully.", flush=True)
-    sys.exit(0)
-
-signal.signal(signal.SIGINT, signal_handler)
-
-# VGG16 for style loss
-print("Loading VGG16 weights (this may take a while on first run)...", flush=True)
-vgg = models.vgg16(weights=models.VGG16_Weights.IMAGENET1K_V1).features.to(device).eval()
-for param in vgg.parameters():
-    param.requires_grad = False
-print("VGG16 loaded.", flush=True)
-
+VGG_LAYERS = [2, 7, 12, 21, 30]  # conv1_2, conv2_2, conv3_3, conv4_3, conv5_3
 vgg_preprocess = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+
 
 def gram_matrix(tensor):
     b, c, h, w = tensor.size()
@@ -92,101 +38,131 @@ def gram_matrix(tensor):
     gram = torch.mm(features, features.t())
     return gram.div(b * c * h * w)
 
-def style_loss(x, recon_x):
-    layers = [2, 7, 12, 21, 30]  # conv1_2, conv2_2, conv3_3, conv4_3, conv5_3
+
+def style_loss(vgg, x, recon_x):
+    # x is detached (target); recon_x keeps gradients so the style term trains.
+    # The v0.2 trainer detached both, which silently disabled style gradients.
     loss = 0
     x_vgg = vgg_preprocess(x.detach().clone())
-    recon_x_vgg = vgg_preprocess(recon_x.detach().clone())
+    recon_x_vgg = vgg_preprocess(recon_x)
     for i, layer in enumerate(vgg):
         x_vgg = layer(x_vgg)
         recon_x_vgg = layer(recon_x_vgg)
-        if i in layers:
-            gram_x = gram_matrix(x_vgg)
-            gram_recon = gram_matrix(recon_x_vgg)
-            loss += nn.functional.mse_loss(gram_x, gram_recon)
+        if i in VGG_LAYERS:
+            loss += nn.functional.mse_loss(gram_matrix(x_vgg), gram_matrix(recon_x_vgg))
     return loss
 
-def vae_loss(recon_x, x, mu, logvar, beta=BETA):
-    mse_loss = nn.functional.mse_loss(recon_x, x, reduction='mean')
-    style_loss_val = style_loss(x, recon_x)
-    mu_clamped = torch.clamp(mu, -10, 10)
-    logvar_clamped = torch.clamp(logvar, -10, 10)
-    kl_div = -0.5 * torch.mean(1 + logvar_clamped - mu_clamped.pow(2) - logvar_clamped.exp())
-    return mse_loss + 20.0 * style_loss_val + beta * kl_div, mse_loss, style_loss_val, kl_div
 
-# Training loop
-print(f"Starting training on {device} for {NUM_EPOCHS} epochs...", flush=True)
-image_vae.train()
-for epoch in range(start_epoch, NUM_EPOCHS):
-    # Dynamically re-read config to allow changing num_epochs while running
-    try:
-        with open(config_path, "r") as f:
-            current_config = yaml.safe_load(f)
-            NUM_EPOCHS = current_config['image_vae']['num_epochs']
-    except Exception:
-        pass
+def vae_loss(vgg, recon_x, x, mu, logvar, beta, style_weight):
+    mse = nn.functional.mse_loss(recon_x, x, reduction="mean")
+    style = style_loss(vgg, x, recon_x)
+    mu_c = torch.clamp(mu, -10, 10)
+    logvar_c = torch.clamp(logvar, -10, 10)
+    kl = -0.5 * torch.mean(1 + logvar_c - mu_c.pow(2) - logvar_c.exp())
+    return mse + style_weight * style + beta * kl, mse, style, kl
 
-    if epoch >= NUM_EPOCHS:
-        print(f"Reached target epoch {NUM_EPOCHS}. Finishing training.", flush=True)
-        break
 
-    total_loss, total_mse, total_style, total_kl = 0, 0, 0, 0
-    
-    # Warm-up phase for KL loss
-    beta = 0.0 if epoch < 10 else min(BETA, BETA * (epoch - 10 + 1) / 10)
-    # Warm-up phase for learning rate
-    lr = min(LEARNING_RATE, 1e-5 + (LEARNING_RATE - 1e-5) * (epoch + 1) / 10) if epoch < 10 else LEARNING_RATE
-    for param_group in optimizer_vae.param_groups:
-        param_group['lr'] = lr
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--stage", choices=["pretrain", "finetune"], required=True)
+    parser.add_argument("--epochs", type=int, default=None, help="override config epochs")
+    parser.add_argument("--max-steps", type=int, default=None, help="stop after N optimizer steps (smoke test)")
+    parser.add_argument("--no-wandb", action="store_true")
+    args = parser.parse_args()
 
-    for batch_idx, batch in enumerate(dataloader):
-        images = batch.to(device)
+    config = load_config(Path(__file__).parent / "config.yaml")
+    vae_cfg = config["image_vae"]
+    device = torch.device(config["system"]["device"] if torch.cuda.is_available() else "cpu")
+    torch.manual_seed(config["system"]["seed"])
+    print(f"Using device: {device}")
 
-        optimizer_vae.zero_grad()
-        recon_images, mu, logvar = image_vae(images)
-        
-        # Debug prints for first batch
-        if batch_idx == 0 and epoch % 5 == 0:
-            print(f"Epoch {epoch+1}, Images min/max: {images.min().item():.4f}/{images.max().item():.4f}")
-            print(f"Epoch {epoch+1}, Recon min/max: {recon_images.min().item():.4f}/{recon_images.max().item():.4f}")
-            print(f"Epoch {epoch+1}, mu std: {mu.std().item():.4f}, logvar std: {logvar.std().item():.4f}")
+    finetune = args.stage == "finetune"
+    epochs = args.epochs or (vae_cfg["finetune_epochs"] if finetune else vae_cfg["pretrain_epochs"])
+    base_beta = vae_cfg["beta"]
+    warmup = vae_cfg["kl_warmup_epochs"]
+    style_weight = vae_cfg["style_weight"]
+    lr = float(vae_cfg["learning_rate"])
 
-        loss, mse_loss, style_loss_val, kl_div = vae_loss(recon_images, images, mu, logvar, beta=beta)
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(image_vae.parameters(), max_norm=1.0)
-        optimizer_vae.step()
+    if finetune:
+        dataset = ClapImageDataset(
+            pairs_file=config["paths"]["pairs_file"],
+            clap_dir=config["paths"]["clap_features"],
+            image_dir=config["paths"]["abstract_art"],
+            size=config["image_size"],
+        )
+        model = ConditionedImageVAE(latent_channels=vae_cfg["latent_channels"]).to(device)
+        warm_start(model, config["paths"]["image_vae_checkpoint"], device=device)
+        ckpt_path = config["paths"]["conditioned_checkpoint"]
+    else:
+        dataset = ImageDataset(config["paths"]["abstract_art"], size=config["image_size"])
+        model = ImageVAE(latent_channels=vae_cfg["latent_channels"]).to(device)
+        ckpt_path = config["paths"]["image_vae_checkpoint"]
+        if Path(ckpt_path).exists():
+            print(f"Resuming pretrain from {ckpt_path}")
+            warm_start(model, ckpt_path, device=device)
 
-        total_loss += loss.item()
-        total_mse += mse_loss.item()
-        total_style += style_loss_val.item()
-        total_kl += kl_div.item()
+    loader = DataLoader(dataset, batch_size=vae_cfg["batch_size"], shuffle=True,
+                        drop_last=True, num_workers=0)
+    print(f"Loaded {len(dataset)} samples for stage {args.stage}")
 
-        # Save images every 10 epochs
-        if batch_idx == 0 and (epoch + 1) % 10 == 0:
-            vutils.save_image(recon_images, os.path.join(OUTPUT_DIR, f"recon_epoch_{epoch+1}.png"), normalize=True)
-            vutils.save_image(images, os.path.join(OUTPUT_DIR, f"orig_epoch_{epoch+1}.png"), normalize=True)
+    print("Loading VGG16 for style loss...")
+    vgg = models.vgg16(weights=models.VGG16_Weights.IMAGENET1K_V1).features.to(device).eval()
+    for p in vgg.parameters():
+        p.requires_grad = False
 
-    scheduler_vae.step()
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, betas=(0.5, 0.999))
+    lr_sched = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
+    run = None if args.no_wandb else init_wandb(config, APPROACH, args.stage)
 
-    avg_loss = total_loss / len(dataloader)
-    avg_mse = total_mse / len(dataloader)
-    avg_style = total_style / len(dataloader)
-    avg_kl = total_kl / len(dataloader)
-    print(f"Epoch {epoch+1}/{NUM_EPOCHS}, Avg Loss: {avg_loss:.4f}, MSE: {avg_mse:.4f}, Style: {avg_style:.4f}, KL: {avg_kl:.4f}")
+    model.train()
+    step = 0
+    for epoch in range(epochs):
+        beta = 0.0 if epoch < warmup else min(base_beta, base_beta * (epoch - warmup + 1) / warmup)
+        totals = {"loss": 0.0, "mse": 0.0, "style": 0.0, "kl": 0.0}
 
-    wandb.log({
-        "epoch": epoch + 1,
-        "loss": avg_loss,
-        "mse_loss": avg_mse,
-        "style_loss": avg_style,
-        "kl": avg_kl,
-        "lr": lr
-    })
+        for batch in loader:
+            if finetune:
+                images = batch["image"].to(device)
+                cond = batch["audio_emb"].to(device)
+                drop = torch.rand(cond.shape[0], device=device) < vae_cfg["cond_dropout"]
+                cond = torch.where(drop[:, None], torch.zeros_like(cond), cond)
+                recon, mu, logvar = model(images, cond=cond)
+            else:
+                images = batch.to(device)
+                recon, mu, logvar = model(images)
 
-    # Save checkpoint every 10 epochs
-    if (epoch + 1) % 10 == 0 or (epoch + 1) == NUM_EPOCHS:
-        torch.save(image_vae.state_dict(), IMAGE_MODEL_PATH)
-        print(f"--- Checkpoint saved at Epoch {epoch+1} ---", flush=True)
+            optimizer.zero_grad()
+            loss, mse, style, kl = vae_loss(vgg, recon, images, mu, logvar, beta, style_weight)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optimizer.step()
 
-torch.save(image_vae.state_dict(), IMAGE_MODEL_PATH)
-print(f"✅ Saved trained ImageVAE to {IMAGE_MODEL_PATH}")
+            totals["loss"] += loss.item()
+            totals["mse"] += mse.item()
+            totals["style"] += style.item()
+            totals["kl"] += kl.item()
+            step += 1
+            if args.max_steps and step >= args.max_steps:
+                save_checkpoint(model, ckpt_path)
+                print(f"[smoke] stopped after {step} steps, checkpoint saved to {ckpt_path}")
+                return
+
+        lr_sched.step()
+        n = len(loader)
+        print(f"Epoch {epoch + 1}/{epochs} | loss {totals['loss']/n:.4f} | "
+              f"mse {totals['mse']/n:.4f} | style {totals['style']/n:.4f} | kl {totals['kl']/n:.4f}",
+              flush=True)
+        if run:
+            run.log({"epoch": epoch + 1, "beta": beta,
+                     **{k: v / n for k, v in totals.items()}})
+
+        if (epoch + 1) % 10 == 0 or (epoch + 1) == epochs:
+            save_checkpoint(model, ckpt_path)
+            print(f"--- checkpoint saved at epoch {epoch + 1} ---", flush=True)
+
+    save_checkpoint(model, ckpt_path)
+    print(f"Saved {args.stage} checkpoint to {ckpt_path}")
+
+
+if __name__ == "__main__":
+    main()

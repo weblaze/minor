@@ -1,0 +1,20 @@
+approach: "01_conditioned_autoencoder"
+
+image_vae:
+  batch_size: 8
+  pretrain_epochs: 40
+  finetune_epochs: 20
+  learning_rate: 1.0e-4
+  beta: 0.005            # KL weight after warm-up
+  kl_warmup_epochs: 10   # beta ramps 0 -> beta over these epochs
+  style_weight: 20.0     # VGG16 gram-matrix style loss weight
+  latent_channels: 8
+  cond_dropout: 0.1      # finetune: probability of dropping CLAP conditioning
+
+gallery:
+  samples_per_song: 4
+
+paths:
+  image_vae_checkpoint: "tmodels/01_conditioned_autoencoder/image_vae.pth"
+  conditioned_checkpoint: "tmodels/01_conditioned_autoencoder/image_vae_conditioned.pth"
+  pairs_file: "datasets/pairs_02.json"
