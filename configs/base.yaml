@@ -1,0 +1,15 @@
+# Shared config — merged under each approach's config.yaml via abstraction.utils.config.load_config
+system:
+  seed: 42
+  device: "cuda"
+
+image_size: 128
+
+paths:
+  fma_audio: "datasets/fma_small"
+  audio_features: "datasets/audio_features"
+  clap_features: "datasets/clap_features"
+  abstract_art: "datasets/abstract_art"
+  models_dir: "tmodels"
+  outputs_dir: "outputs"
+  clap_checkpoint: "music_audioset_epoch_15_esc_90.14.pt"

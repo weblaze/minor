@@ -41,6 +41,7 @@ venv.bak/
 
 # Project Specific Data & Outputs
 generated_images/
+outputs/
 wandb/
 evaluation/results/
 visualization/latent_space_plots/
