@@ -1,0 +1,26 @@
+approach: "04_temporal_video"
+
+video:
+  segment_seconds: 4     # one keyframe latent per segment
+  fps: 12
+  frames_per_transition: 12   # slerp steps between adjacent keyframes
+  dream_every: 0         # 0 = off; N = every Nth segment is null-conditioned
+  guidance_scale: 3.0
+  num_steps: 50
+
+# generation model: reuses approach 02's diffusion artifacts
+vae:
+  kind: "own"
+  latent_channels: 8
+
+cond:
+  source: "clap"
+  dim: 512
+
+latent_diffusion:
+  time_emb_dim: 128
+  num_train_timesteps: 1000
+
+paths:
+  image_vae_checkpoint: "tmodels/01_conditioned_autoencoder/image_vae.pth"
+  unet_checkpoint: "tmodels/02_latent_diffusion_clap/unet_own.pth"

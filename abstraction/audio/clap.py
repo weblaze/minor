@@ -36,6 +36,20 @@ class ClapEncoder:
             )
         return np.asarray(embeds)
 
+    def embed_array(self, y, sr):
+        """Embed a raw waveform segment. Returns a [1, 512] tensor.
+
+        CLAP expects 48 kHz input; resamples if needed.
+        """
+        import librosa
+
+        if sr != 48000:
+            y = librosa.resample(y, orig_sr=sr, target_sr=48000)
+        y = torch.from_numpy(y).float().unsqueeze(0)
+        with torch.no_grad():
+            embed = self.model.get_audio_embedding_from_data(x=y, use_tensor=True)
+        return embed.to(self.device)
+
     def embed_texts(self, texts):
         """Returns a [N, 512] numpy array of CLAP text embeddings."""
         with torch.no_grad():
