@@ -10,19 +10,33 @@ Development never blocks on these — items get added as phases complete. Work t
 - [ ] `pip install -r requirements.txt && pip install -e .`
 - [ ] `wandb login` (or set `WANDB_MODE=offline`)
 
-## Training run order
+## Training run order (all commands from repo root)
 
-(Items will be filled in with exact commands as each approach phase lands.)
-
-1. [ ] Approach 02: `make_pairs.py` — generate audio↔image pseudo-pairs
-2. [ ] Approach 02: `precompute_latents.py`
-3. [ ] Approach 01: pretrain stage (or reuse an existing `image_vae.pth` if you have one)
-4. [ ] Approach 01: finetune stage with CLAP conditioning (~1–2 h on GTX 1650)
-5. [ ] Approach 01 gate: check `sample_gallery.py` output — images must differ visibly by genre before moving on
-6. [ ] Approach 02: train diffusion (overnight on 1650 at 128px, or a few hours on a rented A100)
-7. [ ] Evaluation suite over approach 01 + 02 outputs
-8. [ ] Approach 03: BYOL-A training (A100 recommended, several days on 1650)
-9. [ ] Approach 04: generate music videos from the approach 02 model
+0. [ ] Extract features if not already on disk:
+       `python preprocessing/extract_audio_features.py` and `python preprocessing/extract_clap_features.py`
+1. [ ] Pairs (needs `pip install open_clip_torch` for pseudo):
+       `python approaches/02_latent_diffusion_clap/make_pairs.py --strategy pseudo`
+2. [ ] Approach 01 pretrain (skip if you copy an existing trained `image_vae.pth`
+       to `tmodels/01_conditioned_autoencoder/image_vae.pth`):
+       `python approaches/01_conditioned_autoencoder/train.py --stage pretrain`
+3. [ ] Approach 01 finetune (~1–2 h on GTX 1650):
+       `python approaches/01_conditioned_autoencoder/train.py --stage finetune`
+4. [ ] **Gate** — genre gallery with 5 contrasting songs; rows must differ visibly:
+       `python approaches/01_conditioned_autoencoder/sample_gallery.py --audio a.mp3 b.mp3 ...`
+       → if it passes, tag it: `git tag -a v1.0.0 -m "approach 01 complete"`
+5. [ ] Precompute latents: `python approaches/02_latent_diffusion_clap/precompute_latents.py`
+6. [ ] Approach 02 smoke then train (overnight on 1650 / hours on A100):
+       `python approaches/02_latent_diffusion_clap/train.py --max-steps 5 --no-wandb`
+       `python approaches/02_latent_diffusion_clap/train.py`
+7. [ ] Sample + dream, then run the evaluation protocol in [evaluation/README.md](evaluation/README.md)
+       → tag `v2.0.0` when alignment beats the shuffled baseline
+8. [ ] Approach 03 BYOL-A (start `--epochs 10` locally, full run on A100):
+       `python approaches/03_byol_a_encoder/train_byol_a.py`
+       then `extract_byol_features.py` + `eval_encoder.py` → tag `v3.0.0`
+9. [ ] Approach 04 video (`pip install "imageio[ffmpeg]"`):
+       `python approaches/04_temporal_video/generate_video.py --audio song.mp3` → tag `v4.0.0`
+10. [ ] Human study (design in evaluation/README.md + research docs): ≥20 raters,
+        conditioned vs dream vs random, Likert 1–5
 
 ## Decisions to make once results exist
 
