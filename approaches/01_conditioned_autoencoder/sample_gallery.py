@@ -46,7 +46,20 @@ def main():
 
     torch.manual_seed(config["system"]["seed"])
     # same latents for every song: differences between rows are purely the conditioning
-    latents = torch.randn(n_samples, config["image_vae"]["latent_channels"], 16, 16, device=device)
+    raw_noise = torch.randn(n_samples, config["image_vae"]["latent_channels"], 16, 16, device=device)
+
+    # Apply spatial smoothing (Gaussian filter) to create spatial correlation (natural image statistics)
+    import torch.nn.functional as F
+    kernel_size = 5
+    sigma = 1.5
+    x = torch.arange(-kernel_size//2 + 1., kernel_size//2 + 1.)
+    x_grid, y_grid = torch.meshgrid(x, x, indexing='ij')
+    kernel = torch.exp(-(x_grid**2 + y_grid**2) / (2 * sigma**2))
+    kernel = kernel / kernel.sum()
+    kernel = kernel.view(1, 1, kernel_size, kernel_size).repeat(config["image_vae"]["latent_channels"], 1, 1, 1).to(device)
+    
+    latents = F.conv2d(raw_noise, kernel, padding=kernel_size//2, groups=config["image_vae"]["latent_channels"])
+    latents = (latents / latents.std()) * 0.5  # Scale standard deviation to 0.5 so style is guided by conditioning
 
     rows = []
     for audio in audio_files:

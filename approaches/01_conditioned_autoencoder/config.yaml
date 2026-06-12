@@ -1,7 +1,7 @@
 approach: "01_conditioned_autoencoder"
 
 image_vae:
-  batch_size: 8
+  batch_size: 32
   pretrain_epochs: 40
   finetune_epochs: 20
   learning_rate: 1.0e-4

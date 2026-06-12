@@ -16,4 +16,5 @@ def init_wandb(config, approach, component):
         job_type=component,
         name=f"{approach}/{component}/{stamp}",
         config=config,
+        anonymous="allow",
     )

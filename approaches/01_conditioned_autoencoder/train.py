@@ -34,22 +34,23 @@ vgg_preprocess = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.
 
 def gram_matrix(tensor):
     b, c, h, w = tensor.size()
-    features = tensor.view(b * c, h * w)
-    gram = torch.mm(features, features.t())
-    return gram.div(b * c * h * w)
+    features = tensor.view(b, c, h * w)
+    gram = torch.bmm(features, features.transpose(1, 2))
+    return gram.div(c * h * w)
 
 
 def style_loss(vgg, x, recon_x):
-    # x is detached (target); recon_x keeps gradients so the style term trains.
-    # The v0.2 trainer detached both, which silently disabled style gradients.
+    # Concatenate target and reconstruction along the batch dimension to process in a single forward pass.
+    # Target x is detached.
+    combined = torch.cat([x.detach(), recon_x], dim=0)
+    combined_vgg = vgg_preprocess(combined)
     loss = 0
-    x_vgg = vgg_preprocess(x.detach().clone())
-    recon_x_vgg = vgg_preprocess(recon_x)
+    curr = combined_vgg
     for i, layer in enumerate(vgg):
-        x_vgg = layer(x_vgg)
-        recon_x_vgg = layer(recon_x_vgg)
+        curr = layer(curr)
         if i in VGG_LAYERS:
-            loss += nn.functional.mse_loss(gram_matrix(x_vgg), gram_matrix(recon_x_vgg))
+            x_feat, recon_feat = torch.chunk(curr, 2, dim=0)
+            loss += nn.functional.mse_loss(gram_matrix(x_feat), gram_matrix(recon_feat))
     return loss
 
 
@@ -93,6 +94,14 @@ def main():
         model = ConditionedImageVAE(latent_channels=vae_cfg["latent_channels"]).to(device)
         warm_start(model, config["paths"]["image_vae_checkpoint"], device=device)
         ckpt_path = config["paths"]["conditioned_checkpoint"]
+
+        # Freeze encoder parameters so the latent space does not adapt to bypass conditioning
+        for p in model.encoder.parameters():
+            p.requires_grad = False
+        for p in model.fc_mu.parameters():
+            p.requires_grad = False
+        for p in model.fc_logvar.parameters():
+            p.requires_grad = False
     else:
         dataset = ImageDataset(config["paths"]["abstract_art"], size=config["image_size"])
         model = ImageVAE(latent_channels=vae_cfg["latent_channels"]).to(device)
@@ -102,15 +111,19 @@ def main():
             warm_start(model, ckpt_path, device=device)
 
     loader = DataLoader(dataset, batch_size=vae_cfg["batch_size"], shuffle=True,
-                        drop_last=True, num_workers=0)
+                        drop_last=True, num_workers=0, pin_memory=True)
     print(f"Loaded {len(dataset)} samples for stage {args.stage}")
 
     print("Loading VGG16 for style loss...")
     vgg = models.vgg16(weights=models.VGG16_Weights.IMAGENET1K_V1).features.to(device).eval()
+    for m in vgg.modules():
+        if isinstance(m, nn.ReLU):
+            m.inplace = False
     for p in vgg.parameters():
         p.requires_grad = False
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr, betas=(0.5, 0.999))
+    # Filter optimizer parameters to train only parameters that require grad (e.g. cond_proj/decoder during finetuning)
+    optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=lr, betas=(0.5, 0.999))
     lr_sched = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
     run = None if args.no_wandb else init_wandb(config, APPROACH, args.stage)
 
@@ -126,7 +139,14 @@ def main():
                 cond = batch["audio_emb"].to(device)
                 drop = torch.rand(cond.shape[0], device=device) < vae_cfg["cond_dropout"]
                 cond = torch.where(drop[:, None], torch.zeros_like(cond), cond)
-                recon, mu, logvar = model(images, cond=cond)
+                
+                # Latent dropout: with 50% probability, we zero out z to force decoder to rely on cond
+                mu, logvar, _ = model.encode(images)
+                z = model.reparameterize(mu, logvar)
+                z_drop = torch.rand(z.shape[0], device=device) < 0.5
+                z = torch.where(z_drop[:, None, None, None], torch.zeros_like(z), z)
+                
+                recon = model.decode(z, cond=cond)
             else:
                 images = batch.to(device)
                 recon, mu, logvar = model(images)
