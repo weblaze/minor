@@ -1,0 +1,30 @@
+# S1. Values marked (plan) are taken from S1_PLAN.md section 3.8; the others are first settings
+# that have not yet been validated by a full run.
+vae:
+  latent_channels: 4
+  base_channels: 64
+  batch_size: 32          # (plan)
+  lr: 2.0e-4              # (plan)
+  epochs: 80
+  warmup_steps: 500
+  kl_weight: 1.0e-3
+  kl_warmup_steps: 5000
+  dino_weight: 0.1
+  amp: true
+
+mapper:
+  hidden: 1024            # (plan)
+  depth: 3                # (plan)
+  batch_size: 64          # (plan) tracks per batch, one window per track
+  real_batch_size: 256
+  lr: 1.0e-4              # (plan)
+  steps: 20000
+  swd_projections: 256
+  lambda_struct: 1.0      # sweep {0.1, 0.3, 1, 3}, selected on validation loss terms only
+  mu_cycle: 1.0
+  val_every: 500
+  amp: false              # float16 gave non-finite gradients through decoder and DINOv2 in the smoke run
+
+eval:
+  knn_k: 10
+  n_permutations: 9999

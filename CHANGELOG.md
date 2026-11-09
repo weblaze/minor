@@ -6,6 +6,9 @@ Versioning scheme: `vX.Y.Z` — `X` = approach being delivered (v1 = approach 01
 
 ## [Unreleased]
 
+### Added (branch `s1-structure`)
+- S1: spatial VAE (GroupNorm, residual blocks), mapping trained with sliced Wasserstein and distance-correlation losses, variants s0, s1_cycle and shuffled, evaluation script, method description in `methods/s1/README.md`
+
 ### Added (branch `base`)
 - Frozen encoders: MERT-v1-95M (per-layer, time-averaged) and DINOv2 ViT-S/14 (differentiable with respect to the image)
 - Audio windowing, hash-based train/val/test splits, embedding shards, extraction scripts
