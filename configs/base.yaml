@@ -1,12 +1,30 @@
-# Shared config, merged under each approach's config.yaml via abstraction.utils.config.load_config
+# Shared config, merged under each method YAML via abstraction.utils.config.load_config
 system:
   seed: 42
   device: "cuda"
 
 image_size: 128
 
+audio:
+  n_windows: 3
+  window_s: 10.0
+
+mert:
+  revision: null   # commit of m-a-p/MERT-v1-95M; null = main
+
+dino:
+  size: 112        # multiple of 14
+  pooling: "cls"
+
+split:
+  val_percent: 10
+  test_percent: 10
+
 paths:
   fma_audio: "datasets/fma_small"
   abstract_art: "datasets/abstract_art"
+  mert_embeddings: "datasets/mert_embeddings"
+  dino_art_features: "datasets/dino_art_features"
   models_dir: "tmodels"
   outputs_dir: "outputs"
+  runs_dir: "runs"

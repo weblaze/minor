@@ -6,6 +6,13 @@ Versioning scheme: `vX.Y.Z` — `X` = approach being delivered (v1 = approach 01
 
 ## [Unreleased]
 
+### Added (branch `base`)
+- Frozen encoders: MERT-v1-95M (per-layer, time-averaged) and DINOv2 ViT-S/14 (differentiable with respect to the image)
+- Audio windowing, hash-based train/val/test splits, embedding shards, extraction scripts
+- Losses: distance-correlation, sliced Wasserstein
+- Metrics: Mantel test with permutation p-value, kNN overlap, retrieval accuracy, Frechet distance, kernel distance, participation ratio
+- Run log: one directory per run with config, git commit, seed and metrics
+
 ## [0.4.0] - 2026-11-10
 
 Cleanup after the 2026-11 audit. Removed code remains in the git history (last commit before the cleanup: `ff46080`).

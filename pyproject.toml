@@ -21,6 +21,8 @@ dependencies = [
     "Pillow>=9.0.0",
     "matplotlib>=3.5.0",
     "tqdm>=4.65.0",
+    "transformers>=4.38.0",
+    "scipy>=1.10.0",
 ]
 
 [tool.setuptools.packages.find]

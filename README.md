@@ -18,9 +18,15 @@ v0.4.0 removes the code that used text-supervised models, the code with known de
 
 ```
 abstraction/
-  models/     ImageVAE (spatial latent, 128 px), AudioVAE, ConditionalUNet
-  data/       ImageDataset
-  utils/      config loader, checkpoint helpers, wandb run naming
+  encoders/   frozen MERT-v1-95M (audio) and DINOv2 ViT-S/14 (image, differentiable)
+  data/       audio windows, hash-based splits, embedding shards, ImageDataset
+  models/     Mapper (MLP), ImageVAE, AudioVAE, ConditionalUNet
+  losses/     distance-correlation loss, sliced Wasserstein distance
+  metrics/    Mantel test, kNN overlap, retrieval, Frechet and kernel distances, participation ratio
+  utils/      config loader, checkpoints, run log (config, git commit, seed, metrics)
+scripts/
+  extract_mert.py   per-track MERT embeddings, shape (3 windows, 13 layers, 768)
+  extract_dino.py   DINOv2 features of the art images
 approaches/
   03_byol_a_encoder/   self-supervised audio encoder (BYOL-A); untrained
 visualization/
@@ -28,7 +34,7 @@ visualization/
 configs/base.yaml
 ```
 
-The model files are untrained scaffolds. They are kept for reuse, not as results.
+ImageVAE, AudioVAE and ConditionalUNet are untrained scaffolds from earlier versions. They are kept for reuse, not as results.
 
 ## Work in progress
 
