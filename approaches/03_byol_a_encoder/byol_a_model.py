@@ -5,8 +5,7 @@ network predicts the target network's projection; the target is an EMA of the
 online weights. No negative pairs needed. Augmentations follow the paper:
 log-mixup-exp with a memory bank of past samples, plus random resize crop.
 
-Kept approach-local until the ablation against CLAP decides whether it gets
-promoted into abstraction/audio/.
+Untrained as of v0.4.0.
 """
 import random
 
@@ -19,7 +18,7 @@ TARGET_FRAMES = 96  # ~1s crops at hop 160 / sr 16000
 
 
 class AudioEncoder(nn.Module):
-    """CNN over log-mel spectrograms -> embedding (default 512-d to match CLAP)."""
+    """CNN over log-mel spectrograms -> embedding (default 512-d)."""
 
     def __init__(self, embed_dim=512):
         super().__init__()

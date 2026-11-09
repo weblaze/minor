@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "abstraction"
-version = "0.3.0"
-description = "Music-to-Image AI without text conditioning"
+version = "0.4.0"
+description = "Text-free, pair-free music-to-abstract-image generation (research code)"
 authors = [
-  { name = "Arunav Ganguly", email = "arunav.ganguly@example.com" }
+  { name = "Arunav Ganguly" }
 ]
 requires-python = ">=3.9"
 dependencies = [
@@ -18,20 +18,10 @@ dependencies = [
     "soundfile>=0.12.0",
     "pyyaml>=6.0",
     "wandb>=0.15.0",
-    "laion-clap>=1.1.4",
-    "diffusers>=0.27.0",
-    "transformers>=4.39.0",
     "Pillow>=9.0.0",
     "matplotlib>=3.5.0",
-    "scikit-learn>=1.0.0",
     "tqdm>=4.65.0",
-    "streamlit>=1.24.0",
-    "yt-dlp>=2023.7.6",
 ]
-
-[project.optional-dependencies]
-eval = ["clean-fid>=0.1.35", "lpips>=0.1.4", "open_clip_torch>=2.24.0"]
-video = ["imageio[ffmpeg]>=2.31.0"]
 
 [tool.setuptools.packages.find]
 include = ["abstraction*"]

@@ -1,7 +1,7 @@
 """Export real loss curves from wandb run history (replaces the old simulated plots).
 
 Usage:
-  python visualization/export_wandb_curves.py --entity <your-wandb-username> [--group 02_latent_diffusion_clap]
+  python visualization/export_wandb_curves.py --entity <your-wandb-username> [--group <wandb-group>]
 """
 import argparse
 from pathlib import Path

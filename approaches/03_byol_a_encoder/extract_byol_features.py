@@ -1,5 +1,4 @@
-"""Extract BYOL-A embeddings for every FMA track, mirroring the clap_features
-layout so approach 02's trainer consumes them via cond.source: byol_a.
+"""Extract one BYOL-A embedding per FMA track into paths.byol_features.
 
 Embedding = encoder output averaged over consecutive crops of the full track.
 

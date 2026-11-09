@@ -6,6 +6,39 @@ Versioning scheme: `vX.Y.Z` — `X` = approach being delivered (v1 = approach 01
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-10
+
+Cleanup after the 2026-11 audit. Removed code remains in the git history (last commit before the cleanup: `ff46080`).
+
+### Removed: text-supervised or label-supervised models (violate the training constraints)
+- `abstraction/audio/clap.py`, `preprocessing/extract_clap_features.py`
+- `approaches/01_conditioned_autoencoder/` (CLAP-conditioned decoder; VGG16 style loss)
+- `approaches/02_latent_diffusion_clap/` (CLAP conditioning; `make_pairs.py` built pseudo-pairs from 16 mood words through CLAP and OpenCLIP text encoders)
+- `approaches/04_temporal_video/` (depends on approach 02)
+- `abstraction/pipelines/latent_diffusion.py`, `app.py`, `run_overnight.ps1`, `NEXT_STEPS.md`
+- `evaluation/clip_alignment.py`, `evaluation/retrieval.py` (CLAP and CLIP), `evaluation/fid.py` (Inception), `evaluation/lpips_diversity.py` (LPIPS)
+- `abstraction/models/vae_codec.py` (wrapper for the Stable Diffusion VAE, which is trained with LPIPS on a text-image corpus)
+- `ConditionedImageVAE`, `ClapImageDataset`, `LatentDataset`
+- `visualization/visualize_latent_space.py` (CLAP embeddings)
+
+### Removed: defects
+- `abstraction/models/scheduler.py`: `DDPMScheduler.step` applied the one-step posterior while sampling on a strided subset of the timesteps
+- `approaches/03_byol_a_encoder/eval_encoder.py`: genre labels read from folder names; FMA-small folders are numbered
+- `abstraction/audio/features.py`, `preprocessing/extract_audio_features.py`, `AudioFeatureDataset`: six 5 s segments averaged frame by frame; per-file normalisation
+- `evaluation/reconstruction.py`, `scratch/`: depended on removed code or on files that are not in the repository
+- `legacy/` (v0.1): the mapping network was trained with MSE between audio and image latents paired by dataset index (random pairing); the inference scripts require an `ImageVAE` definition that is no longer in the code
+
+### Removed: simulated or stale artefacts
+- `legacy/visualization/plot_loss_curves.py`, `plot_cycle_consistency.py`, `plot_image_evolution.py`: the plotted values were generated in the script, not logged from training
+- Figures in `visualization/` produced by those scripts (`fid_scores.png`, `cycle_consistency.png`, `image_evolution.png`, three loss-curve figures) and `latent_space_distribution.png`
+- `tmodels/` (v0.1 checkpoints that cannot be loaded with the current model definitions; reconstruction images)
+- `evaluation/results/vae_reconstruction_test.png`
+
+### Changed
+- `README.md` rewritten to state the actual status
+- Dependencies reduced to those used by the remaining code
+- Placeholder author email removed from `pyproject.toml`
+
 ## [0.3.0] — 2026-06-11
 
 Foundation restructure: modular core package + one subdirectory per approach.
