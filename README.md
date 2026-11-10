@@ -27,6 +27,8 @@ abstraction/
 scripts/
   extract_mert.py   per-track MERT embeddings, shape (3 windows, 13 layers, 768)
   extract_dino.py   DINOv2 features of the art images
+  build_art_set.py  art collection from WikiArt style folders, 128 px, with manifest
+  kaggle/           job launcher and runner for Kaggle kernels (see scripts/kaggle/README.md)
 approaches/
   03_byol_a_encoder/   self-supervised audio encoder (BYOL-A); untrained
 visualization/
