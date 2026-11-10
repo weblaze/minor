@@ -1,0 +1,21 @@
+# Builds the art collection and extracts MERT embeddings of FMA-small.
+# Output: abstract_art.zip, art_manifest.csv, mert_embeddings/
+name: abstraction-features
+branch: base
+gpu: true
+datasets:
+  - imsparsh/fma-free-music-archive-small-medium
+  - steubk/wikiart
+kernels: []
+inputs:
+  FMA: fma_small
+commands:
+  - nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+  - python -c "import torch, transformers; print(torch.__version__, transformers.__version__)"
+  - python scripts/build_art_set.py --source /kaggle/input --out datasets/abstract_art
+  - cp datasets/abstract_art/manifest.csv /kaggle/working/art_manifest.csv
+  - cd datasets && python -m zipfile -c /kaggle/working/abstract_art.zip abstract_art
+  - find {FMA} -name "*.mp3" | wc -l
+  - pip install --quiet nnAudio
+  - python scripts/extract_mert.py --source {FMA} --out /kaggle/working/mert_embeddings --tracks-per-batch 8
+  - ls -la /kaggle/working/mert_embeddings
