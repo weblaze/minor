@@ -12,6 +12,8 @@ Versioning scheme: `vX.Y.Z` — `X` = approach being delivered (v1 = approach 01
 - Losses: distance-correlation, sliced Wasserstein
 - Metrics: Mantel test with permutation p-value, kNN overlap, retrieval accuracy, Frechet distance, kernel distance, participation ratio
 - Run log: one directory per run with config, git commit, seed and metrics
+- `scripts/build_art_set.py`: art collection from WikiArt style folders with a manifest
+- `scripts/kaggle/`: job launcher, kernel runner and the feature-extraction job for Kaggle
 
 ## [0.4.0] - 2026-11-10
 
