@@ -1,0 +1,13 @@
+# Checks MERT loading and extraction on 16 tracks. Output: mert_check/ (one shard), printed shape and statistics.
+name: abstraction-mert-check
+branch: base
+gpu: true
+datasets:
+  - imsparsh/fma-free-music-archive-small-medium
+kernels: []
+inputs:
+  FMA: fma_small
+commands:
+  - pip install --quiet nnAudio
+  - python scripts/extract_mert.py --source {FMA} --out /kaggle/working/mert_check --tracks-per-batch 8 --limit 16
+  - python -c "from abstraction.data.embeddings import load_shards; import numpy as np; ids, x = load_shards('/kaggle/working/mert_check'); x = x.astype(np.float32); print(len(ids), x.shape, x.dtype); print('finite', bool(np.isfinite(x).all())); print('per-layer std', x.std(axis=(0, 1, 3)).round(3).tolist())"
