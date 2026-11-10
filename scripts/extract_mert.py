@@ -87,7 +87,7 @@ def main():
     if skipped:
         with open(f"{args.out}/skipped.tsv", "a") as f:
             f.write("\n".join(skipped) + "\n")
-    print(f"embedded {n} tracks, skipped {len(skipped)}")
+    print(f"embedded {n} tracks, skipped {len(skipped)}; hidden-state route: {encoder.route}")
 
 
 if __name__ == "__main__":
