@@ -1,0 +1,44 @@
+# Q1. None of these values has been validated by a full run.
+audio_code:
+  variant: "standardised"   # mean | standardised | whitened; selected by diagnostics D1 (same-track window retrieval)
+  whiten_dim: 128
+
+vae:
+  latent_dim: 128
+  base_channels: 64
+  batch_size: 32
+  lr: 2.0e-4
+  epochs: 80
+  warmup_steps: 500
+  kl_weight: 0.02           # weight of the KL term averaged over latent dimensions
+  kl_warmup_steps: 5000
+  dino_weight: 0.1
+  amp: true
+
+gate:
+  n_samples: 2000
+  gmm_components: 10
+  max_fd_ratio: 2.0         # pass if FD(prior samples) <= max_fd_ratio * FD(reconstructions), both against test art
+
+mapper:
+  hidden: 1024
+  depth: 3
+  batch_size: 64            # tracks per batch, one window per track
+  real_batch_size: 256
+  lr: 1.0e-4
+  steps: 20000
+  swd_projections: 256
+  w_feat: 1.0
+  w_lat: 0.25
+  w_global: 1.0
+  w_local: 1.0
+  local_temperature: 0.5
+  val_every: 500
+  amp: false                # float16 gives non-finite gradients through decoder and DINOv2
+
+baseline:
+  n_axes: 32
+
+eval:
+  knn_k: 10
+  n_permutations: 9999
