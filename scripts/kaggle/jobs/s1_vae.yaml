@@ -1,0 +1,17 @@
+# S1 stage A: trains the spatial VAE, then times the mapper for 200 steps.
+# Output: runs/s1_vae_*/vae.pt, runs/s1_mapper_s1_*/ (timing only)
+name: abstraction-s1-vae
+branch: s1-structure
+gpu: true
+datasets: []
+kernels:
+  - "{user}/abstraction-features"
+inputs:
+  MERT: mert_embeddings
+  ART_ZIP: abstract_art.zip
+commands:
+  - nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+  - python -m zipfile -e {ART_ZIP} datasets/
+  - ln -s {MERT} datasets/mert_embeddings
+  - python methods/s1/train_vae.py --seed 0
+  - python methods/s1/train_mapper.py --vae runs/s1_vae_seed0_*/vae.pt --variant s1 --seed 0 --steps 200
