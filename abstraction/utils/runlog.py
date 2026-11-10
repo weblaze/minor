@@ -38,6 +38,9 @@ class RunLog:
 
     def __init__(self, root, name, config, seed):
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        tag = config.get("system", {}).get("tag")
+        if tag:
+            name = f"{name}_{tag}"
         self.dir = Path(root) / f"{name}_seed{seed}_{stamp}"
         self.dir.mkdir(parents=True, exist_ok=False)
         with open(self.dir / "config.yaml", "w") as f:
