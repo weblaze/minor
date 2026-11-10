@@ -1,6 +1,6 @@
-# Q1. None of these values has been validated by a full run.
+# Q1. audio_code.variant follows D1 of 2026-11-10 (docs/run_log.md). No other value has been validated by a full run.
 audio_code:
-  variant: "standardised"   # mean | standardised | whitened; selected by diagnostics D1 (same-track window retrieval)
+  variant: "whitened"       # mean | standardised | whitened; selected by diagnostics D1 (same-track window retrieval)
   whiten_dim: 128
 
 vae:

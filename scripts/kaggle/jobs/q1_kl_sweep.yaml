@@ -1,0 +1,23 @@
+# Q1 VAE at four KL weights, each followed by the gate. Two chains, one per GPU.
+name: abstraction-q1-kl-sweep
+branch: q1-structure
+gpu: true
+kernels:
+  - "{user}/abstraction-features"
+inputs:
+  ART_ZIP: abstract_art.zip
+commands:
+  - nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+  - python -m zipfile -e {ART_ZIP} datasets/
+  - >-
+    (set -e; export CUDA_VISIBLE_DEVICES=0; for kl in 0.1 1.0; do
+    python methods/q1/train_vae.py --seed 0 --kl-weight $kl --tag kl$kl;
+    python methods/q1/gate.py --seed 0 --tag kl$kl --vae runs/q1_vae_kl${{kl}}_seed0_*/vae.pt;
+    done) > runs/gpu0.log 2>&1 & p0=$!;
+    (set -e; export CUDA_VISIBLE_DEVICES=1; for kl in 0.3 3.0; do
+    python methods/q1/train_vae.py --seed 0 --kl-weight $kl --tag kl$kl;
+    python methods/q1/gate.py --seed 0 --tag kl$kl --vae runs/q1_vae_kl${{kl}}_seed0_*/vae.pt;
+    done) > runs/gpu1.log 2>&1 & p1=$!;
+    wait $p0; r0=$?; wait $p1; r1=$?;
+    grep -h "passed" runs/gpu0.log runs/gpu1.log;
+    exit $((r0 + r1))
