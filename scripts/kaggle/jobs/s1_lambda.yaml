@@ -1,0 +1,26 @@
+# S1 mapper, variant s1, seed 0, at lambda_struct 0.1, 0.3, 1 and 3 (20000 steps each).
+# Two chains, one per GPU. lambda is selected on validation L_struct and L_dist; no evaluation on test data here.
+name: abstraction-s1-lambda
+branch: s1-structure
+gpu: true
+kernels:
+  - "{user}/abstraction-features"
+  - "{user}/abstraction-s1-vae"
+inputs:
+  MERT: mert_embeddings
+  ART_ZIP: abstract_art.zip
+  VAE: vae.pt
+commands:
+  - nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+  - python -m zipfile -e {ART_ZIP} datasets/
+  - ln -s {MERT} datasets/mert_embeddings
+  - >-
+    (set -e; export CUDA_VISIBLE_DEVICES=0; for lam in 0.1 1.0; do
+    python methods/s1/train_mapper.py --vae {VAE} --variant s1 --seed 0 --lambda-struct $lam --tag lam$lam;
+    done) > runs/gpu0.log 2>&1 & p0=$!;
+    (set -e; export CUDA_VISIBLE_DEVICES=1; for lam in 0.3 3.0; do
+    python methods/s1/train_mapper.py --vae {VAE} --variant s1 --seed 0 --lambda-struct $lam --tag lam$lam;
+    done) > runs/gpu1.log 2>&1 & p1=$!;
+    wait $p0; r0=$?; wait $p1; r1=$?;
+    tail -n 2 runs/gpu0.log runs/gpu1.log;
+    exit $((r0 + r1))

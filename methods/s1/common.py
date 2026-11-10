@@ -19,6 +19,7 @@ def base_parser(description):
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--config", default=str(CONFIG_PATH))
     parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--tag", default=None, help="appended to the run directory name")
     parser.add_argument("--smoke", action="store_true",
                         help="synthetic data, randomly initialised DINOv2, few steps; checks the code path only")
     return parser
@@ -28,6 +29,8 @@ def setup(args):
     config = load_config(args.config)
     if args.seed is not None:
         config["system"]["seed"] = args.seed
+    if args.tag:
+        config["system"]["tag"] = args.tag
     device = torch.device(config["system"]["device"] if torch.cuda.is_available() else "cpu")
     return config, device
 
