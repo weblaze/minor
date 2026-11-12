@@ -1,0 +1,32 @@
+# S1 seed 0: variants s0, shuffled and s1_cycle (20000 steps each, lambda_struct 1.0), then evaluation on the
+# test split of all four variants and of random M. The s1 mapper is the lambda 1.0 run of abstraction-s1-lambda.
+name: abstraction-s1-seed0
+branch: s1-structure
+gpu: true
+kernels:
+  - "{user}/abstraction-features"
+  - "{user}/abstraction-s1-vae"
+  - "{user}/abstraction-s1-lambda"
+inputs:
+  MERT: mert_embeddings
+  ART_ZIP: abstract_art.zip
+  VAE: vae.pt
+  S1_RUN: s1_mapper_s1_lam1.0_seed0_20261110T215540Z
+commands:
+  - nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+  - python -m zipfile -e {ART_ZIP} datasets/
+  - ln -s {MERT} datasets/mert_embeddings
+  - >-
+    (set -e; export CUDA_VISIBLE_DEVICES=0; for v in s0 shuffled; do
+    python methods/s1/train_mapper.py --vae {VAE} --variant $v --seed 0;
+    python methods/s1/evaluate.py --vae {VAE} --seed 0 --mapper runs/s1_mapper_${{v}}_seed0_*/mapper.pt;
+    done) > runs/gpu0.log 2>&1 & p0=$!;
+    (set -e; export CUDA_VISIBLE_DEVICES=1;
+    python methods/s1/evaluate.py --vae {VAE} --seed 0 --mapper {S1_RUN}/mapper.pt;
+    python methods/s1/evaluate.py --vae {VAE} --seed 0;
+    python methods/s1/train_mapper.py --vae {VAE} --variant s1_cycle --seed 0;
+    python methods/s1/evaluate.py --vae {VAE} --seed 0 --mapper runs/s1_mapper_s1_cycle_seed0_*/mapper.pt;
+    ) > runs/gpu1.log 2>&1 & p1=$!;
+    wait $p0; r0=$?; wait $p1; r1=$?;
+    tail -n 2 runs/gpu0.log runs/gpu1.log;
+    exit $((r0 + r1))
