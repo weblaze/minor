@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you refer to this work, please cite it using these metadata."
+title: "Abstraction: music-to-abstract-image generation without text or paired data"
+type: software
+authors:
+  - family-names: Ganguly
+    given-names: Arunav
+  - family-names: Dhingra
+    given-names: Aman
+  - family-names: Verma
+    given-names: Sourabh Singh
+repository-code: "https://github.com/weblaze/minor"
+version: 0.4.1
+date-released: 2026-11-13
+keywords:
+  - music-to-image
+  - cross-modal generation
+  - unpaired learning
+  - structure preservation
+  - self-supervised representations
