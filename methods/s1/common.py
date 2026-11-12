@@ -11,7 +11,6 @@ from abstraction.utils.config import load_config
 
 CONFIG_PATH = Path(__file__).with_name("config.yaml")
 LATENT_SIDE = 16
-CODE_DIM = 768
 
 
 def base_parser(description):
@@ -20,6 +19,7 @@ def base_parser(description):
     parser.add_argument("--config", default=str(CONFIG_PATH))
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--tag", default=None, help="appended to the run directory name")
+    parser.add_argument("--code", choices=("mean", "whitened"), default=None, help="audio code variant")
     parser.add_argument("--smoke", action="store_true",
                         help="synthetic data, randomly initialised DINOv2, few steps; checks the code path only")
     return parser
@@ -31,6 +31,8 @@ def setup(args):
         config["system"]["seed"] = args.seed
     if args.tag:
         config["system"]["tag"] = args.tag
+    if args.code:
+        config["audio_code"]["variant"] = args.code
     device = torch.device(config["system"]["device"] if torch.cuda.is_available() else "cpu")
     return config, device
 
@@ -60,8 +62,12 @@ def latent_dim(config):
     return config["vae"]["latent_channels"] * LATENT_SIDE * LATENT_SIDE
 
 
+def code_dim(config):
+    return 768 if config["audio_code"]["variant"] == "mean" else config["audio_code"]["whiten_dim"]
+
+
 def build_mapper(config):
-    return Mapper(CODE_DIM, latent_dim(config), config["mapper"]["hidden"], config["mapper"]["depth"])
+    return Mapper(code_dim(config), latent_dim(config), config["mapper"]["hidden"], config["mapper"]["depth"])
 
 
 @torch.no_grad()
@@ -86,7 +92,7 @@ def features_of_dataset(dino, dataset, device, batch_size=64, transform=None):
 
 
 def generate(mapper, vae, latent_std, codes, code_mean, code_std, config):
-    """Audio codes (n, 768) -> (images, latents in units of latent_std)."""
+    """Audio codes (n, d) -> (images, latents in units of latent_std)."""
     z = mapper((codes - code_mean) / code_std)
     z = z.view(-1, config["vae"]["latent_channels"], LATENT_SIDE, LATENT_SIDE)
     return vae.decode(z * latent_std), z

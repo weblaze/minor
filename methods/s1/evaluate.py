@@ -71,10 +71,12 @@ def main():
 
     vae, latent_std = load_vae(args.vae, config, device)
     dino = build_dino(config, device, args.smoke)
+    state = torch.load(args.mapper, map_location=device, weights_only=True) if args.mapper else None
+    if state is not None:
+        config["audio_code"]["variant"] = state.get("code", "mean")
     mapper = build_mapper(config).to(device).eval()
     track_ids, test_codes = load_codes(config, "test", args.smoke)
-    if args.mapper:
-        state = torch.load(args.mapper, map_location=device, weights_only=True)
+    if state is not None:
         mapper.load_state_dict(state["model"])
         code_mean, code_std = state["code_mean"].to(device), state["code_std"].to(device)
         variant = state["variant"]
@@ -82,7 +84,8 @@ def main():
         train = torch.from_numpy(load_codes(config, "train", args.smoke)[1]).to(device)
         code_mean, code_std = train.mean(dim=(0, 1)), train.std(dim=(0, 1)) + 1e-6
         variant = "random"
-    config["run"] = {"variant": variant, "vae": str(args.vae), "mapper": args.mapper}
+    config["run"] = {"variant": variant, "vae": str(args.vae), "mapper": args.mapper,
+                     "code": config["audio_code"]["variant"]}
     log = RunLog(config["paths"]["runs_dir"], f"s1_eval_{variant}" + ("_smoke" if args.smoke else ""), config, seed)
 
     codes = test_codes.mean(axis=1)

@@ -31,7 +31,7 @@ from abstraction.losses.structure import distance_correlation_loss, pairwise_dis
 from abstraction.models.mapper import Mapper
 from abstraction.utils.runlog import RunLog, set_seed
 
-from common import (CODE_DIM, base_parser, build_dino, build_mapper, encode_images, generate, latent_dim,
+from common import (base_parser, build_dino, build_mapper, code_dim, encode_images, generate, latent_dim,
                     load_vae, setup)
 from data import art_dataset, load_codes, sample_windows
 
@@ -58,7 +58,8 @@ def main():
     steps = args.steps or (30 if args.smoke else hp["steps"])
     use_struct, use_cycle, shuffle = VARIANTS[args.variant]
     set_seed(seed)
-    config["run"] = {"variant": args.variant, "vae": str(args.vae), "steps": steps}
+    config["run"] = {"variant": args.variant, "vae": str(args.vae), "steps": steps,
+                     "code": config["audio_code"]["variant"]}
     log = RunLog(config["paths"]["runs_dir"], f"s1_mapper_{args.variant}" + ("_smoke" if args.smoke else ""),
                  config, seed)
 
@@ -76,7 +77,7 @@ def main():
     real, real_val = real.to(device), real_val.to(device)
 
     mapper = build_mapper(config).to(device)
-    inverse = Mapper(latent_dim(config), CODE_DIM, hp["hidden"], hp["depth"]).to(device) if use_cycle else None
+    inverse = Mapper(latent_dim(config), code_dim(config), hp["hidden"], hp["depth"]).to(device) if use_cycle else None
     params = list(mapper.parameters()) + (list(inverse.parameters()) if use_cycle else [])
     optimiser = torch.optim.AdamW(params, lr=hp["lr"])
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimiser, lambda s: 0.5 * (1 + math.cos(math.pi * s / steps)))
@@ -143,7 +144,8 @@ def main():
             log.log(split="val", step=step + 1, l_dist=v_dist, l_struct=v_struct, l_cycle=v_cycle)
 
     torch.save({"model": mapper.state_dict(), "code_mean": code_mean.cpu(), "code_std": code_std.cpu(),
-                "variant": args.variant, "seed": seed, "steps": steps}, log.dir / "mapper.pt")
+                "variant": args.variant, "seed": seed, "steps": steps,
+                "code": config["audio_code"]["variant"]}, log.dir / "mapper.pt")
     print(f"run directory: {log.dir}")
 
 

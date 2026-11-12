@@ -8,18 +8,44 @@ from abstraction.data.splits import split_of
 
 
 def load_codes(config, split, smoke=False):
-    """Audio codes of one split: (track ids, array (n_tracks, n_windows, 768)).
+    """Audio codes of one split: (track ids, array (n_tracks, n_windows, d)).
 
-    The code of a window is the unweighted mean of the 13 MERT layer vectors.
+    mean      unweighted mean of the 13 MERT layer vectors (d = 768)
+    whitened  the Q1 code: each layer z-scored per dimension, averaged, centred, projected on the
+              leading `whiten_dim` principal axes and scaled to unit variance; fitted on training tracks
     """
     if smoke:
         ids, codes = _synthetic_codes()
+        layers = codes[:, :, None, :]
     else:
         ids, layers = load_shards(config["paths"]["mert_embeddings"])
-        codes = layers.astype(np.float32).mean(axis=2)
     val, test = config["split"]["val_percent"], config["split"]["test_percent"]
-    keep = [i for i, track_id in enumerate(ids) if split_of(track_id, val, test) == split]
-    return [ids[i] for i in keep], codes[keep]
+    splits = np.array([split_of(track_id, val, test) for track_id in ids])
+    keep = np.flatnonzero(splits == split)
+    variant = config["audio_code"]["variant"]
+    if variant == "mean":
+        codes = layers[keep].astype(np.float32).mean(axis=2)
+    elif variant == "whitened":
+        codes = _whitened(layers[splits == "train"], layers[keep], config["audio_code"]["whiten_dim"])
+    else:
+        raise ValueError(f"unknown code variant {variant!r}")
+    return [ids[i] for i in keep], codes
+
+
+def _whitened(train_layers, layers, dim):
+    flat = train_layers.reshape(-1, *train_layers.shape[2:])
+    mean = flat.mean(axis=0, dtype=np.float64).astype(np.float32)
+    std = flat.std(axis=0, dtype=np.float64).astype(np.float32) + 1e-6
+
+    def standardised(x):
+        return ((x.astype(np.float32) - mean) / std).mean(axis=2)
+
+    train = standardised(train_layers).reshape(-1, mean.shape[-1]).astype(np.float64)
+    centre = train.mean(axis=0)
+    eigval, eigvec = np.linalg.eigh(np.cov(train - centre, rowvar=False))
+    order = np.argsort(eigval)[::-1][:dim]
+    projection = eigvec[:, order] / np.sqrt(eigval[order] + 1e-8)
+    return ((standardised(layers) - centre) @ projection).astype(np.float32)
 
 
 def sample_windows(codes, batch_size, generator):
