@@ -522,3 +522,57 @@ Observations:
 - The PCA heads give the lowest FD of the painting output (254 to 289) and the most distinct paintings (481 to 546) with r 0.03 to 0.05 below the baseline.
 - Chamfer terms and straight-through retrieval without a distribution term collapse to 2 to 63 paintings. In these collapsed solutions r under pixel-based feature sets is 0.3 to 0.55, against 0.06 to 0.19 for the configurations with several hundred paintings. `st_0.1` on the mean code reaches the DINOv2 r of the baseline (0.644) with 27 paintings.
 - Displacement of the baseline is 0.36 to 0.38; the mean cosine distance between two paintings of the test set is 0.672. The nearest painting is more than half a typical inter-painting distance away from the output.
+
+## 2026-11-13 — F1 follow-up: art subspace, genre against painting style, mapper seeds (local, exploratory)
+
+Scripts are not in the repository. Configuration `swd` of `realism.py` unless stated. FMA genre labels and WikiArt style names (from the painting file names) are used for interpretation only.
+
+A. Structure of the painting output measured in the leading principal axes of the training-art features (Euclidean distances on the projected, centred features; r against audio distances):
+
+| Code | Configuration | Full features (cosine) | 2 axes | 4 axes | 8 axes | 16 axes | 64 axes | Residual beyond 16 axes |
+|---|---|---|---|---|---|---|---|---|
+| mean | `swd` | 0.645 | 0.428 | 0.536 | 0.583 | 0.593 | 0.617 | 0.383 |
+| mean | `soft_0.02_swd` | 0.707 | 0.353 | 0.517 | 0.577 | 0.599 | 0.654 | 0.466 |
+| standardised | `swd` | 0.573 | 0.505 | 0.558 | 0.588 | 0.583 | 0.562 | 0.120 |
+| standardised | `soft_0.02_swd` | 0.612 | 0.429 | 0.575 | 0.637 | 0.634 | 0.615 | 0.129 |
+
+Cumulative variance of art features: 0.21 at 4 axes, 0.32 at 8, 0.45 at 16, 0.74 at 64. Most of the structure of the painting output is present in the first 4 to 8 axes. Restricting the measurement to leading axes does not raise r above about 0.65; the hypothesis that uncontrolled variation in the remaining axes sets the ceiling is not supported.
+
+B. Genre of the test track against the WikiArt style of its painting (seed 0). Row fractions; share of each style in the gallery: Abstract Expressionism 0.47, Colour Field 0.27, Minimalism 0.23, Action painting 0.02.
+
+| Genre | Abstract Expressionism (mean / standardised code) | Colour Field | Minimalism |
+|---|---|---|---|
+| Electronic | 0.85 / 0.87 | 0.11 / 0.09 | 0.03 / 0.04 |
+| Hip-Hop | 0.82 / 0.84 | 0.11 / 0.11 | 0.04 / 0.02 |
+| Rock | 0.67 / 0.71 | 0.24 / 0.24 | 0.07 / 0.06 |
+| Pop | 0.63 / 0.57 | 0.27 / 0.26 | 0.10 / 0.14 |
+| International | 0.48 / 0.37 | 0.35 / 0.56 | 0.15 / 0.04 |
+| Experimental | 0.47 / 0.44 | 0.41 / 0.42 | 0.10 / 0.13 |
+| Instrumental | 0.34 / 0.36 | 0.35 / 0.36 | 0.30 / 0.27 |
+| Folk | 0.16 / 0.10 | 0.44 / 0.52 | 0.39 / 0.37 |
+
+Cramer V: 0.285 (mean code), 0.326 (standardised code).
+
+C. Five mapper seeds (0 to 4), share of Colour Field and Minimalism paintings per genre:
+
+| Code | Seed | r painting | Electronic | Hip-Hop | Rock | Pop | International | Experimental | Instrumental | Folk |
+|---|---|---|---|---|---|---|---|---|---|---|
+| mean | 0 | 0.645 | 0.14 | 0.15 | 0.30 | 0.37 | 0.51 | 0.51 | 0.65 | 0.83 |
+| mean | 1 | 0.659 | 0.10 | 0.20 | 0.39 | 0.37 | 0.48 | 0.60 | 0.72 | 0.84 |
+| mean | 2 | 0.624 | 0.20 | 0.16 | 0.30 | 0.34 | 0.53 | 0.55 | 0.74 | 0.85 |
+| mean | 3 | 0.648 | 0.14 | 0.16 | 0.43 | 0.32 | 0.49 | 0.52 | 0.65 | 0.87 |
+| mean | 4 | 0.628 | 0.80 | 0.68 | 0.51 | 0.43 | 0.34 | 0.39 | 0.15 | 0.09 |
+| standardised | 0 | 0.573 | 0.13 | 0.13 | 0.29 | 0.40 | 0.60 | 0.55 | 0.64 | 0.89 |
+| standardised | 1 | 0.560 | 0.15 | 0.10 | 0.48 | 0.39 | 0.51 | 0.53 | 0.72 | 0.80 |
+| standardised | 2 | 0.549 | 0.14 | 0.14 | 0.39 | 0.41 | 0.44 | 0.60 | 0.77 | 0.84 |
+| standardised | 3 | 0.559 | 0.14 | 0.16 | 0.48 | 0.46 | 0.62 | 0.57 | 0.69 | 0.92 |
+| standardised | 4 | 0.541 | 0.75 | 0.79 | 0.53 | 0.57 | 0.35 | 0.42 | 0.21 | 0.05 |
+
+Between seeds, the two paintings assigned to the same track have mean cosine similarity 0.536 (mean code) and 0.508 (standardised), against 0.490 and 0.474 for shuffled tracks; the same painting is assigned in 1.6 % and 0.8 % of cases.
+
+Observations:
+
+- r of the painting output is stable across seeds: 0.624 to 0.659 (mean code), 0.541 to 0.573 (standardised).
+- In all five seeds the genre ordering along the acoustic-to-electronic contrast of the audio code coincides with the ordering of the paintings along the contrast between Colour Field and Minimalism on one side and Abstract Expressionism on the other. The leading contrast of the audio code is mapped to the leading contrast of the art features.
+- The orientation is not fixed: seed 4 gives the mirror image (Folk to Abstract Expressionism, Electronic to Colour Field and Minimalism) under both codes. The objective depends on distances only and is invariant to this reflection; the mapping is identified up to symmetries of this kind. Seeds share the initialisation across codes, so the two codes are not independent trials of the orientation.
+- The assignment of individual paintings is not reproducible between seeds; the coarse correspondence is, up to orientation.
