@@ -408,3 +408,33 @@ Observations:
 - Single layers differ: layers 3 and 9 retain more structure after retrieval than layers 0 and 12; no single layer exceeds the mean code.
 
 Direct assignment (exploratory, script not in the repository): a soft assignment of the 789 test tracks to the 4666 paintings, optimised by gradient descent on 1 - r with temperature annealing and then hardened, gave r 0.545 (mean code), 0.547 (standardised) and 0.230 (whitened). This optimiser did not exceed map-then-retrieve for the mean and standardised codes; it is not a proof of an upper bound.
+
+## 2026-11-13 — F1 variants and controls, seed 0 (local)
+
+| Field | Value |
+|---|---|
+| Scripts | `methods/f1/train_mapper.py`, `methods/f1/evaluate.py` |
+| Commit | `aa6783c` (`f1-feature`) |
+| Hardware | GTX 1650, 4 GB |
+| Result | completed |
+
+Standardised code, 4000 steps, 789 test tracks, 9999 permutations, k = 10 (chance overlap 0.0127). Mantel p = 0.0001 for every row.
+
+| Variant | Output | Mantel r | Mantel rho | kNN overlap | Trustworthiness | FD | Distinct paintings |
+|---|---|---|---|---|---|---|---|
+| `f1` | direct | 0.988 | 0.987 | 0.819 | 0.999 | 902.8 | |
+| `f1` | painting | 0.578 | 0.572 | 0.134 | 0.862 | 342.8 | 385 |
+| `f0` | direct | 0.621 | 0.596 | 0.446 | 0.966 | 784.4 | |
+| `f0` | painting | 0.303 | 0.288 | 0.091 | 0.746 | 254.1 | 494 |
+| `shuffled` | direct | 0.558 | 0.534 | 0.389 | 0.952 | 852.5 | |
+| `shuffled` | painting | 0.279 | 0.265 | 0.085 | 0.748 | 281.9 | 459 |
+| random M | direct | 0.734 | 0.703 | 0.513 | 0.979 | 1785.6 | |
+| random M | painting | 0.066 | 0.039 | 0.037 | 0.603 | 1336.9 | 151 |
+
+`f1`, painting output, r under pixel-based feature sets of the retrieved paintings: colour mean and standard deviation 0.169, colour histogram 0.193, 8 x 8 layout 0.153, power spectrum 0.183 (`f0`: 0.100, 0.109, 0.092, 0.082).
+
+Observations:
+
+- An untrained mapping already gives r 0.734 on its direct outputs: a smooth network preserves distances of its input. The direct output is therefore not evidence of learning; the painting output is.
+- On the painting output, `f1` (0.578) exceeds `f0` (0.303), `shuffled` (0.279) and random M (0.066). The structure term contributes 0.28 over the distribution term alone.
+- `f0` and `shuffled` retain r about 0.3 after retrieval: a mapping that only matches the art distribution, being continuous, sends similar tracks to similar paintings.
