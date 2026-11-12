@@ -303,3 +303,36 @@ Observations:
 - No batch-level distribution term tested places the direct outputs on the art distribution (FD 575 to 1205 against 113). The outputs occupy fewer directions than art (PR about 25 against 44.8) or, for the whitened code, more (108). The weakness of the distribution term is not specific to the S1 latent space.
 - Replacing each output by the nearest training painting gives real images (FD 287 to 369; plain retrieval baseline 229 to 251) with r 0.58 to 0.65 for the mean and standardised codes. The plain retrieval baseline gave r 0.05 to 0.12 and PCA alignment 0.18 to 0.42.
 - The whitened code loses its structure when outputs are restricted to real paintings (r 0.066). Its distances are nearly uniform (coefficient of variation 0.090, D1) and its participation ratio (104.7) exceeds that of art features (44.8). D1 selects the code by same-track retrieval; this criterion does not test whether the code's geometry can be represented in the image feature space.
+
+## 2026-11-12 — audio-code axes against FMA metadata (local, evaluation only)
+
+Not part of either protocol; metadata are used for interpretation only and enter no training step. Source: `fma_metadata.zip` (`tracks.csv`, `features.csv`, `echonest.csv`). 7994 tracks (all splits), window-averaged codes, principal axes fitted on training tracks. Echo Nest attributes exist for 1294 of the tracks. Scripts are not in the repository.
+
+Nearest-neighbour agreement (cosine, k = 10; genre chance 0.125, 8 balanced genres):
+
+| Code | Same-genre rate | Same-artist rate |
+|---|---|---|
+| mean | 0.457 | 0.127 |
+| standardised | 0.528 | 0.159 |
+| whitened | 0.493 | 0.165 |
+
+Leading axes of the mean code. eta^2: fraction of axis variance explained by genre. R^2: 5-fold ridge regression from 100 low-level descriptors (mean and standard deviation of RMS energy, spectral centroid, bandwidth, roll-off, zero-crossing rate, spectral contrast, MFCC, chroma, tonnetz). rho: Spearman correlation.
+
+| Axis | Variance fraction | Genre eta^2 | R^2 from low-level descriptors | Strongest Echo Nest attributes (rho) |
+|---|---|---|---|---|
+| 1 | 0.130 | 0.31 | 0.82 | acousticness +0.68, energy -0.51, danceability -0.47 |
+| 2 | 0.078 | 0.19 | 0.62 | danceability +0.53, speechiness +0.31, instrumentalness -0.28 |
+| 3 | 0.060 | 0.09 | 0.62 | speechiness +0.14 |
+| 4 | 0.050 | 0.09 | 0.65 | energy -0.32, instrumentalness +0.22 |
+| 5 | 0.036 | 0.14 | 0.61 | instrumentalness -0.18 |
+| 6 | 0.032 | 0.09 | 0.45 | speechiness +0.27 |
+
+Genre means on axis 1 (axis standard deviation 0.52): Folk +0.49, Instrumental +0.31, International +0.09, Experimental +0.05, Pop -0.02, Rock -0.11, Hip-Hop -0.39, Electronic -0.40. The strongest single low-level correlates of axis 1 are spectral-contrast bands (rho up to +0.63); RMS energy is not among the three strongest for axes 1 to 4.
+
+The standardised code has the same leading contrast (axis 1: acousticness -0.65, danceability +0.55, energy +0.50; genre eta^2 0.33; R^2 0.77).
+
+Observations:
+
+- The first axis of the mean code separates acoustic from electronic, high-energy material and is largely predictable from spectral descriptors. It is a timbre and production contrast, not loudness.
+- The axes that S1 preserves (exploratory entry above, part B) are therefore musically interpretable, and coarse: they relate to genre-level differences.
+- The standardised code has the highest same-genre neighbour rate of the three.
