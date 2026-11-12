@@ -5,21 +5,21 @@ Research code for music-to-abstract-image generation under two constraints:
 1. No text at any point in training (no captions, no text-supervised encoders such as CLAP or CLIP).
 2. No paired data and no human labels as a training signal. Human judgement is used for evaluation only.
 
-## Status (v0.4.0)
+## Status
 
-The `main` branch holds the cleaned code base and no trained model. The methods under development are on the branches listed under "Work in progress"; their runs are recorded in [docs/run_log.md on `base`](https://github.com/weblaze/minor/blob/base/docs/run_log.md).
+The `main` branch holds the cleaned code base and no trained model. Methods are developed on the branches listed under "Work in progress". Every run on real data is recorded in [docs/run_log.md on `base`](https://github.com/weblaze/minor/blob/base/docs/run_log.md), including runs with negative outcomes.
 
-State of the experiments on 2026-11-13 (FMA-small, 7994 tracks; 5832 abstract paintings from WikiArt; one seed; 789 test tracks):
+Data in use: FMA-small (music) and abstract paintings from four WikiArt styles. Encoders: MERT-v1-95M (audio) and DINOv2 ViT-S/14 (image), both frozen and both trained without text.
 
-| Finding | Evidence |
-|---|---|
-| A mapping trained with the structure term transfers the distance structure of an audio code to generated images on unseen tracks | S1: Mantel r 0.861 against 0.083 without the term, 0.140 with shuffled audio distances, 0.055 untrained |
-| The audio code determines the structure score | S1 and Q1: 0.83 to 0.86 on the mean code, 0.26 to 0.27 on the whitened code |
-| The method determines the distance of the outputs to the art distribution | Frechet distance (DINOv2 features, training art 113): Q1 402 to 425, S1 1173 |
-| Most of the measured structure is specific to the DINOv2 feature space | r 0.02 to 0.31 under colour, layout and power-spectrum features of the same images |
-| Real paintings assigned by a learned mapping carry part of the structure | F1: r 0.57 to 0.64 with nearest training painting; 0.05 to 0.12 for retrieval without a learned mapping |
+Progress as of 2026-11-13:
 
-These are single-seed results and no human evaluation has been made.
+- Feature extraction, training and evaluation run end to end on free GPU sessions through a job runner (`scripts/kaggle/`).
+- S1 and Q1 have been trained and evaluated on held-out tracks for one seed, with their controls (no structure term, shuffled audio distances, untrained mapping) and two non-learned baselines.
+- The structure objective transfers the distance structure of the audio representation to the outputs on held-out tracks; the controls do not.
+- Open problems identified by these runs: the distribution term does not keep generated images close to the art distribution; the choice of audio representation changes the outcome more than the choice of method; the measured structure depends on the image feature space used to measure it.
+- F1 was added to separate these effects: it maps into image-feature space and assigns real paintings, without an image generator.
+
+All results are from a single seed and no human evaluation has been made. They are preliminary and are not reported here as findings.
 
 History of the code base:
 
@@ -63,6 +63,10 @@ Structure-transfer methods are developed on separate branches from a shared base
 | `q1-structure` | Q1: S1 with a vector-latent generator, a feature-space realism term, a local structure term and pre-training diagnostics |
 | `f1-feature` | F1: a mapping from audio codes to DINOv2 image features with nearest-painting retrieval and no image decoder; used to locate where structure is lost |
 
+## Versioning
+
+Releases of `main` are tagged `vX.Y.Z` (see [CHANGELOG.md](CHANGELOG.md)). Snapshots of a method branch are tagged `<method>-vX.Y.Z` (`base-`, `s1-`, `q1-`, `f1-`) and published as pre-releases; each run in the run log names the commit it was made from.
+
 ## Setup
 
 ```bash
@@ -71,3 +75,11 @@ pip install -e .
 ```
 
 Datasets are not tracked. See [datasets/README.md](datasets/README.md).
+
+## Authors and citation
+
+Arunav Ganguly, Aman Dhingra, Sourabh Singh Verma. Citation metadata is in [CITATION.cff](CITATION.cff).
+
+## Licence
+
+No licence has been granted yet. The code is published for reading and review; reuse requires permission from the authors.
