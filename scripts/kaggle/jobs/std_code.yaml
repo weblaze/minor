@@ -1,0 +1,35 @@
+# Standardised audio code, seed 0, one session. GPU 0: Q1 variant q1 (VAE kl_weight 0.02, gate overridden).
+# GPU 1: S1 variant s1, run from a second clone at s1-structure d3b327b9a571974a8a7bb0a8c442b165ec496539.
+name: abstraction-std-code
+branch: q1-structure
+gpu: true
+kernels:
+  - "{user}/abstraction-features"
+  - "{user}/abstraction-q1-vae"
+  - "{user}/abstraction-s1-vae"
+inputs:
+  MERT: mert_embeddings
+  ART_ZIP: abstract_art.zip
+  Q1_VAE: q1_vae_seed0_20261110T155658Z
+  S1_VAE: s1_vae_seed0_20261110T155619Z
+commands:
+  - nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+  - python -m zipfile -e {ART_ZIP} datasets/
+  - ln -s {MERT} datasets/mert_embeddings
+  - >-
+    git clone --quiet https://github.com/weblaze/minor.git /tmp/s1 &&
+    cd /tmp/s1 && git checkout --quiet d3b327b9a571974a8a7bb0a8c442b165ec496539 &&
+    ln -s /kaggle/working/runs runs && mkdir -p datasets && cp -r /tmp/minor/datasets/. datasets/ &&
+    PYTHONPATH=/tmp/s1 python -c "import abstraction, sys; print(abstraction.__file__); sys.exit(0 if abstraction.__file__.startswith('/tmp/s1/') else 1)"
+  - >-
+    (set -e; export CUDA_VISIBLE_DEVICES=0;
+    python methods/q1/train_mapper.py --seed 0 --code standardised --tag stdcode --vae {Q1_VAE}/vae.pt --variant q1 --ignore-gate;
+    python methods/q1/evaluate.py --seed 0 --tag stdcode --vae {Q1_VAE}/vae.pt --mapper runs/q1_mapper_q1_stdcode_seed0_*/mapper.pt;
+    ) > runs/gpu0.log 2>&1 & p0=$!;
+    (set -e; export CUDA_VISIBLE_DEVICES=1; export PYTHONPATH=/tmp/s1; cd /tmp/s1;
+    python methods/s1/train_mapper.py --seed 0 --code standardised --tag stdcode --vae {S1_VAE}/vae.pt --variant s1;
+    python methods/s1/evaluate.py --seed 0 --tag stdcode --vae {S1_VAE}/vae.pt --mapper runs/s1_mapper_s1_stdcode_seed0_*/mapper.pt;
+    ) > runs/gpu1.log 2>&1 & p1=$!;
+    wait $p0; r0=$?; wait $p1; r1=$?;
+    tail -n 2 runs/gpu0.log runs/gpu1.log;
+    exit $((r0 + r1))
