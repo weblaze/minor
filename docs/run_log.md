@@ -120,3 +120,58 @@ Consequences, as fixed in `methods/q1/README.md`:
 
 - `audio_code.variant` is set to `whitened`; the baselines are to be recomputed with it.
 - `vae.kl_weight` is raised and the VAE retrained until the gate passes.
+
+## 2026-11-10 — Q1 KL-weight sweep
+
+| Field | Value |
+|---|---|
+| Job | `scripts/kaggle/jobs/q1_kl_sweep.yaml` |
+| Kernel | `arunavganguly/abstraction-q1-kl-sweep`, version 1 |
+| Commit | `7c5da53` (`q1-structure`) |
+| Hardware | 2 x Tesla T4, one chain per GPU |
+| Result | completed; duration 7605 s |
+
+VAE seed 0, 80 epochs, followed by the gate. Frechet distances (FD) on DINOv2 features against 595 test images; FD of training art against the same reference is 113.3. The row for 0.02 is from the previous entry.
+
+| `kl_weight` | Val L1 | KL (nats/image) | Active dims | FD reconstructions | FD interpolations | FD mixture | FD prior | Ratio | Gate |
+|---|---|---|---|---|---|---|---|---|---|
+| 0.02 | 0.155 | 240.1 | 128 | 208.5 | 456.2 | 601.3 | 974.7 | 4.68 | fail |
+| 0.1 | 0.176 | 70.3 | 128 | 307.5 | 556.7 | 557.0 | 685.2 | 2.23 | fail |
+| 0.3 | 0.213 | 21.5 | 126 | 576.8 | 708.5 | 681.8 | 773.2 | 1.34 | pass |
+| 1.0 | 0.265 | 7.0 | 115 | 980.5 | 1053.2 | 1013.1 | 1078.2 | 1.10 | pass |
+| 3.0 | 0.332 | 2.2 | 2 | 1284.4 | 1297.9 | 1290.5 | 1261.4 | 0.98 | pass |
+
+Observations:
+
+- The lowest weight that passes the gate is 0.3. By the rule in `methods/q1/README.md` this VAE is selected.
+- The ratio falls because FD(reconstructions) rises (208.5 to 576.8 between 0.02 and 0.3), not because FD(prior) falls to the level of reconstructions at 0.02. The lowest FD(prior) in the sweep is 685.2 (weight 0.1); no setting brings prior samples within a factor of six of training art.
+- At weight 3.0 the posterior collapses (2 active dimensions of 128).
+- The mapper is trained against posterior samples, not prior samples. FD(interpolations) is lowest at weight 0.02 (456.2).
+
+Limitation of the gate rule exposed by this sweep: a ratio criterion can be met by degrading reconstructions. The rule is kept as written; the selected VAE (0.3) and the VAE with the best reconstructions (0.02, gate overridden) are both carried to a seed-0 mapper run, and the second is reported as a deviation from the protocol.
+
+## 2026-11-10 — S1 lambda sweep
+
+| Field | Value |
+|---|---|
+| Job | `scripts/kaggle/jobs/s1_lambda.yaml` |
+| Kernel | `arunavganguly/abstraction-s1-lambda`, version 1 |
+| Commit | `e040aba` (`s1-structure`) |
+| Hardware | 2 x Tesla T4, one chain per GPU |
+| Result | completed; duration 18953 s |
+
+Variant `s1`, seed 0, 20000 steps, VAE of `arunavganguly/abstraction-s1-vae`. Validation losses on 797 tracks; training values are the last logged batch.
+
+| `lambda_struct` | Val L_dist, step 20000 | Val L_struct, step 20000 | Val L_struct, step 5500 | Train L_struct, last batch |
+|---|---|---|---|---|
+| 0.1 | 0.0769 | 0.2221 | 0.2110 | 0.0614 |
+| 0.3 | 0.0777 | 0.1989 | 0.1689 | 0.0401 |
+| 1.0 | 0.0836 | 0.1395 | 0.1164 | 0.0328 |
+| 3.0 | 0.0988 | 0.1067 | 0.0926 | 0.0276 |
+
+Observations:
+
+- Validation L_struct decreases and validation L_dist increases monotonically with lambda; no value dominates another.
+- For every lambda, validation L_struct is lower at step 5500 than at step 20000 while training L_struct keeps falling. The structure term overfits the 6408 training tracks. The protocol evaluates the final step; this is not changed.
+- Selection rule, stated after seeing these values: the largest lambda whose validation L_dist is within 10 % of the lowest validation L_dist in the sweep. Lowest 0.0769; lambda 1.0 gives 0.0836 (+8.7 %), lambda 3.0 gives 0.0988 (+28.5 %). Selected: `lambda_struct` = 1.0, the configured value. The run at lambda 1.0 is the seed-0 `s1` run.
+- Mean step time 0.46 s; 2.6 h per run.
