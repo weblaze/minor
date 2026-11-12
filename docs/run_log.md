@@ -438,3 +438,87 @@ Observations:
 - An untrained mapping already gives r 0.734 on its direct outputs: a smooth network preserves distances of its input. The direct output is therefore not evidence of learning; the painting output is.
 - On the painting output, `f1` (0.578) exceeds `f0` (0.303), `shuffled` (0.279) and random M (0.066). The structure term contributes 0.28 over the distribution term alone.
 - `f0` and `shuffled` retain r about 0.3 after retrieval: a mapping that only matches the art distribution, being continuous, sends similar tracks to similar paintings.
+
+## 2026-11-13 — F1 experiment grid: placing outputs on the art collection (local)
+
+| Field | Value |
+|---|---|
+| Script | `methods/f1/realism.py --seed 0 --code <mean, standardised>` |
+| Commit | grid as committed in `f1-feature` after the run; run made on a working tree with `realism.py` uncommitted |
+| Hardware | GTX 1650, 4 GB |
+| Result | completed; 27 configurations per code |
+
+One mapping per configuration, 4000 steps, 789 test tracks. Configurations are defined in `GRID` of `realism.py`; the default is head `free`, sliced Wasserstein term, global structure term, batch 256. Columns: r and FD of the direct output; r, kNN overlap and FD of the nearest training painting; displacement (mean cosine distance between output and its nearest painting); number of distinct paintings; mean r of the painting output against five single-layer codes; mean r under four pixel-based feature sets of the paintings. `n/a`: all tracks received the same painting.
+
+Mean code:
+
+| Configuration | r direct | FD direct | r painting | kNN painting | FD painting | Displacement | Distinct | r views | r pixel (mean of 4) |
+|---|---|---|---|---|---|---|---|---|---|
+| `swd` | 0.945 | 854 | 0.645 | 0.131 | 384 | 0.360 | 340 | 0.445 | 0.123 |
+| `struct_only` | 0.952 | 2435 | 0.139 | 0.056 | 1630 | 0.883 | 104 | 0.126 | 0.086 |
+| `swd_batch1024` | 0.943 | 779 | 0.636 | 0.135 | 355 | 0.357 | 358 | 0.440 | 0.116 |
+| `critic_0.3` | 0.886 | 1590 | 0.574 | 0.094 | 405 | 0.423 | 341 | 0.224 | 0.093 |
+| `critic_1` | 0.824 | 1451 | 0.583 | 0.101 | 426 | 0.387 | 295 | 0.251 | 0.112 |
+| `critic_3` | 0.778 | 1288 | 0.415 | 0.114 | 432 | 0.364 | 262 | 0.325 | 0.087 |
+| `chamfer_1` | 0.516 | 2070 | 0.523 | 0.024 | 2051 | 0.038 | 62 | 0.056 | 0.489 |
+| `chamfer_3` | 0.504 | 1479 | 0.480 | 0.030 | 1538 | 0.055 | 62 | 0.071 | 0.451 |
+| `chamfer_10` | 0.207 | 1519 | 0.181 | 0.041 | 1585 | 0.053 | 57 | 0.074 | 0.123 |
+| `critic_chamfer` | 0.595 | 1454 | 0.586 | 0.024 | 1353 | 0.020 | 63 | 0.055 | 0.517 |
+| `pca32_swd` | 0.938 | 665 | 0.618 | 0.109 | 289 | 0.283 | 481 | 0.372 | 0.087 |
+| `pca64_swd` | 0.943 | 507 | 0.605 | 0.107 | 275 | 0.310 | 488 | 0.365 | 0.095 |
+| `soft_0.05_swd` | 0.827 | 571 | 0.618 | 0.155 | 462 | 0.387 | 269 | 0.451 | 0.050 |
+| `soft_0.02_swd` | 0.832 | 443 | 0.707 | 0.134 | 341 | 0.473 | 375 | 0.392 | 0.067 |
+| `soft_0.02` | 0.935 | 1106 | 0.354 | 0.081 | 805 | 0.834 | 157 | 0.187 | 0.046 |
+| `soft_0.01` | 0.912 | 1597 | 0.279 | 0.057 | 2211 | 0.777 | 25 | 0.225 | 0.175 |
+| `st_0.05_swd` | 0.696 | 736 | 0.696 | 0.077 | 736 | 0.354 | 116 | 0.275 | 0.285 |
+| `st_0.05` | 0.648 | 1988 | 0.648 | 0.029 | 1988 | 0.371 | 14 | 0.159 | 0.425 |
+| `st_0.02` | 0.046 | 2624 | n/a | 0.012 | 2624 | 0.312 | 1 | n/a | n/a |
+| `st_0.1` | 0.644 | 2562 | 0.644 | 0.026 | 2562 | 0.287 | 27 | 0.122 | 0.531 |
+| `swd_local` | 0.946 | 853 | 0.639 | 0.119 | 396 | 0.361 | 326 | 0.441 | 0.130 |
+| `st_0.05_local` | 0.606 | 2181 | 0.606 | 0.024 | 2181 | 0.322 | 11 | 0.079 | 0.554 |
+| `st_0.05_local_only` | 0.519 | 3065 | 0.519 | 0.030 | 3065 | 0.430 | 6 | 0.233 | 0.476 |
+| `views_swd` | 0.854 | 862 | 0.589 | 0.130 | 354 | 0.362 | 381 | 0.503 | 0.109 |
+| `st_0.05_views` | 0.566 | 2377 | 0.566 | 0.024 | 2377 | 0.385 | 9 | 0.246 | 0.388 |
+| `noise16_swd` | 0.944 | 863 | 0.645 | 0.117 | 336 | 0.374 | 380 | 0.405 | 0.104 |
+| `noise16_critic` | 0.849 | 1453 | 0.496 | 0.100 | 446 | 0.347 | 264 | 0.257 | 0.129 |
+
+Standardised code:
+
+| Configuration | r direct | FD direct | r painting | kNN painting | FD painting | Displacement | Distinct | r views | r pixel (mean of 4) |
+|---|---|---|---|---|---|---|---|---|---|
+| `swd` | 0.988 | 897 | 0.573 | 0.136 | 344 | 0.375 | 386 | 0.503 | 0.172 |
+| `struct_only` | 0.996 | 1670 | 0.160 | 0.064 | 397 | 0.844 | 539 | 0.138 | 0.026 |
+| `swd_batch1024` | 0.989 | 844 | 0.579 | 0.132 | 335 | 0.374 | 396 | 0.507 | 0.166 |
+| `critic_0.3` | 0.939 | 961 | 0.386 | 0.129 | 309 | 0.337 | 421 | 0.338 | 0.087 |
+| `critic_1` | 0.849 | 1545 | 0.364 | 0.134 | 374 | 0.437 | 345 | 0.309 | 0.153 |
+| `critic_3` | 0.755 | 1678 | 0.411 | 0.114 | 568 | 0.387 | 211 | 0.365 | 0.119 |
+| `chamfer_1` | 0.429 | 1323 | 0.402 | 0.042 | 1323 | 0.032 | 53 | 0.353 | 0.336 |
+| `chamfer_3` | 0.410 | 1334 | 0.389 | 0.035 | 1370 | 0.032 | 47 | 0.341 | 0.328 |
+| `chamfer_10` | 0.394 | 1335 | 0.375 | 0.026 | 1373 | 0.031 | 44 | 0.332 | 0.314 |
+| `critic_chamfer` | 0.065 | 1501 | 0.046 | 0.049 | 1433 | 0.017 | 55 | 0.037 | 0.052 |
+| `pca32_swd` | 0.969 | 703 | 0.552 | 0.132 | 269 | 0.310 | 509 | 0.477 | 0.155 |
+| `pca64_swd` | 0.986 | 518 | 0.524 | 0.120 | 254 | 0.331 | 546 | 0.455 | 0.109 |
+| `soft_0.05_swd` | 0.765 | 591 | 0.627 | 0.176 | 627 | 0.474 | 226 | 0.548 | 0.163 |
+| `soft_0.02_swd` | 0.785 | 442 | 0.612 | 0.171 | 427 | 0.625 | 328 | 0.535 | 0.139 |
+| `soft_0.02` | 0.973 | 1335 | 0.063 | 0.024 | 2969 | 0.954 | 18 | 0.053 | 0.050 |
+| `soft_0.01` | 0.964 | 1307 | 0.065 | 0.028 | 2481 | 0.935 | 40 | 0.050 | 0.046 |
+| `st_0.05_swd` | 0.628 | 454 | 0.628 | 0.151 | 454 | 0.516 | 283 | 0.557 | 0.241 |
+| `st_0.05` | 0.416 | 2497 | 0.416 | 0.036 | 2497 | 0.404 | 5 | 0.369 | 0.364 |
+| `st_0.02` | 0.295 | 3079 | 0.295 | 0.022 | 3079 | 0.632 | 2 | 0.254 | 0.295 |
+| `st_0.1` | 0.643 | 831 | 0.643 | 0.151 | 831 | 0.423 | 223 | 0.569 | 0.169 |
+| `swd_local` | 0.988 | 874 | 0.570 | 0.133 | 342 | 0.383 | 377 | 0.500 | 0.173 |
+| `st_0.05_local` | 0.551 | 1707 | 0.551 | 0.092 | 1707 | 0.438 | 59 | 0.489 | 0.249 |
+| `st_0.05_local_only` | 0.344 | 2677 | 0.344 | 0.032 | 2677 | 0.446 | 4 | 0.305 | 0.296 |
+| `views_swd` | 0.982 | 883 | 0.577 | 0.139 | 354 | 0.372 | 373 | 0.518 | 0.178 |
+| `st_0.05_views` | 0.352 | 3423 | 0.352 | 0.020 | 3423 | 0.374 | 2 | 0.317 | 0.352 |
+| `noise16_swd` | 0.988 | 907 | 0.564 | 0.141 | 352 | 0.378 | 382 | 0.496 | 0.153 |
+| `noise16_critic` | 0.869 | 1242 | 0.378 | 0.140 | 408 | 0.330 | 342 | 0.327 | 0.113 |
+
+Observations:
+
+- Without a distribution term (`struct_only`, `soft_0.02`, `soft_0.01`) the painting output loses the structure (r 0.06 to 0.35). A distribution term is necessary.
+- No configuration raises r of the painting output by more than 0.07 over the baseline while keeping the number of distinct paintings: best `soft_0.02_swd` on the mean code (0.707 against 0.645, 375 paintings, FD 341) and `st_0.1` / `st_0.05_swd` / `soft_0.05_swd` on the standardised code (0.63 to 0.64 against 0.573).
+- The critic lowers r and does not lower the FD of the direct output in 4000 steps. The local term, the noise input, the larger batch and the multi-layer term change r by less than 0.01 to 0.06; the multi-layer term raises the agreement with single-layer codes (mean code: 0.445 to 0.503) at a cost in r.
+- The PCA heads give the lowest FD of the painting output (254 to 289) and the most distinct paintings (481 to 546) with r 0.03 to 0.05 below the baseline.
+- Chamfer terms and straight-through retrieval without a distribution term collapse to 2 to 63 paintings. In these collapsed solutions r under pixel-based feature sets is 0.3 to 0.55, against 0.06 to 0.19 for the configurations with several hundred paintings. `st_0.1` on the mean code reaches the DINOv2 r of the baseline (0.644) with 27 paintings.
+- Displacement of the baseline is 0.36 to 0.38; the mean cosine distance between two paintings of the test set is 0.672. The nearest painting is more than half a typical inter-painting distance away from the output.
