@@ -336,3 +336,75 @@ Observations:
 - The first axis of the mean code separates acoustic from electronic, high-energy material and is largely predictable from spectral descriptors. It is a timbre and production contrast, not loudness.
 - The axes that S1 preserves (exploratory entry above, part B) are therefore musically interpretable, and coarse: they relate to genre-level differences.
 - The standardised code has the highest same-genre neighbour rate of the three.
+
+## 2026-11-12 — code swap: S1 on the whitened code, Q1 on the mean code
+
+| Field | Value |
+|---|---|
+| Job | `scripts/kaggle/jobs/code_swap.yaml` |
+| Kernel | `arunavganguly/abstraction-code-swap`, version 1 |
+| Commit | `76b055e` (`q1-structure`); S1 from a second clone at `7a17f65` (`s1-structure`) |
+| Hardware | 2 x Tesla T4, one method per GPU |
+| Result | completed; duration 9407 s |
+
+Seed 0, 20000 steps, 789 test tracks. Q1 on the VAE with `kl_weight` 0.02 (gate overridden). Rows marked "earlier" are from the entries of 2026-11-12 above.
+
+| Method | Audio code | Mantel r | Mantel rho | kNN overlap | Trustworthiness | FD | Participation ratio |
+|---|---|---|---|---|---|---|---|
+| S1 `s1` (earlier) | mean | 0.861 | 0.853 | 0.268 | 0.932 | 1172.8 | 14.7 |
+| S1 `s1` | whitened | 0.272 | 0.226 | 0.178 | 0.791 | 1172.9 | 29.7 |
+| Q1 `q1` (earlier) | whitened | 0.259 | 0.210 | 0.152 | 0.774 | 402.1 | 28.9 |
+| Q1 `q1` | mean | 0.825 | 0.840 | 0.282 | 0.915 | 425.4 | 24.3 |
+
+Observations:
+
+- The audio code determines the structure score: both methods reach 0.83 to 0.86 on the mean code and 0.26 to 0.27 on the whitened code.
+- The method determines the distance to the art distribution: Q1 gives FD 402 to 425 under either code, S1 gives 1173 under either code.
+- Q1 on the mean code has the highest structure score among runs with FD below 500.
+
+Structure of the Q1 outputs under pixel-based feature sets (local, exploratory; test images regenerated from the checkpoints; Pearson r against the code each mapper was trained on):
+
+| Feature set | Q1, mean code | Q1, whitened code |
+|---|---|---|
+| DINOv2 CLS (training target) | 0.825 | 0.259 |
+| Colour mean and standard deviation | 0.233 | 0.102 |
+| Colour histogram | 0.023 | 0.079 |
+| 8 x 8 layout | 0.307 | 0.115 |
+| Radial power spectrum | 0.097 | 0.078 |
+
+As for S1, most of the structure measured in DINOv2 features is not present in these feature sets.
+
+## 2026-11-13 — F1 diagnosis (local)
+
+| Field | Value |
+|---|---|
+| Script | `methods/f1/diagnose.py --seed 0` |
+| Commit | `aa6783c` (`f1-feature`); run before the commit, working tree not clean |
+| Hardware | GTX 1650, 4 GB |
+| Result | completed |
+
+One mapping per audio code (variant `f1`, 4000 steps, sliced Wasserstein term, `lambda_struct` 1). r: Pearson correlation between cosine distances of audio codes and of image features, 789 tracks. Stages are defined in `methods/f1/README.md`. Gallery: 4666 training paintings. PR: participation ratio of the code; CV: coefficient of variation of its pairwise distances.
+
+| Code | PR | CV | r train direct | r test direct | r test painting | kNN test painting | r gallery 500 | r gallery 2000 | r oracle painting | FD test painting | Distinct paintings |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| mean | 25.7 | 0.336 | 0.965 | 0.945 | 0.644 | 0.129 | 0.597 | 0.611 | 0.650 | 386 | 338 |
+| standardised | 38.8 | 0.152 | 0.991 | 0.988 | 0.572 | 0.135 | 0.519 | 0.548 | 0.571 | 343 | 388 |
+| whitened | 104.7 | 0.090 | 0.980 | 0.966 | 0.066 | 0.033 | 0.047 | 0.061 | 0.085 | 546 | 266 |
+| layer 0, standardised | 28.8 | 0.180 | 0.996 | 0.995 | 0.548 | 0.115 | 0.482 | 0.526 | 0.536 | 321 | 403 |
+| layer 3, standardised | 32.0 | 0.165 | 0.993 | 0.990 | 0.610 | 0.150 | 0.541 | 0.593 | 0.602 | 337 | 388 |
+| layer 6, standardised | 36.2 | 0.158 | 0.992 | 0.989 | 0.595 | 0.154 | 0.535 | 0.566 | 0.587 | 334 | 393 |
+| layer 9, standardised | 34.8 | 0.163 | 0.991 | 0.989 | 0.615 | 0.139 | 0.554 | 0.595 | 0.627 | 334 | 401 |
+| layer 12, standardised | 58.0 | 0.128 | 0.987 | 0.982 | 0.516 | 0.139 | 0.447 | 0.496 | 0.520 | 347 | 393 |
+
+FD of the direct outputs: 854 to 1197 for all codes.
+
+Observations:
+
+- The mapping generalises: r on test tracks is within 0.02 of r on training tracks for every code. The overfitting seen in S1 (validation L_struct rising after step 5500) does not appear when the mapping is trained without a decoder and feature extractor in the loop.
+- Structure is lost at the restriction to real paintings: r falls from 0.95 to 0.99 (direct) to 0.52 to 0.64 (painting), and kNN overlap from 0.70 to 0.89 to 0.12 to 0.15.
+- The loss depends weakly on the number of paintings: 500 paintings give r within 0.05 to 0.07 of 4666 paintings.
+- The loss is not a generalisation effect: a mapping trained on the test tracks themselves gives the same r after retrieval (oracle column).
+- The direct outputs are far from the art distribution (FD 854 or more); the retrieval step moves each output to the art collection and this displacement is where the distance structure is distorted.
+- Single layers differ: layers 3 and 9 retain more structure after retrieval than layers 0 and 12; no single layer exceeds the mean code.
+
+Direct assignment (exploratory, script not in the repository): a soft assignment of the 789 test tracks to the 4666 paintings, optimised by gradient descent on 1 - r with temperature annealing and then hardened, gave r 0.545 (mean code), 0.547 (standardised) and 0.230 (whitened). This optimiser did not exceed map-then-retrieve for the mean and standardised codes; it is not a proof of an upper bound.
