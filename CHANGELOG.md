@@ -6,6 +6,15 @@ Versioning scheme: `vX.Y.Z` — `X` = approach being delivered (v1 = approach 01
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-13
+
+### Added
+- `CITATION.cff`
+- README: status of the experiments (qualitative), versioning scheme, authors, licence statement
+
+### Tags
+- Method-branch snapshots are tagged `<method>-vX.Y.Z` and published as pre-releases: `base-v0.1.0`, `s1-v0.1.0`, `q1-v0.1.0` (first runs on real data, seed 0).
+
 ## [0.4.0] - 2026-11-10
 
 Cleanup after the 2026-11 audit. Removed code remains in the git history (last commit before the cleanup: `ff46080`).
