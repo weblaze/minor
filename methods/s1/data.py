@@ -10,9 +10,10 @@ from abstraction.data.splits import split_of
 def load_codes(config, split, smoke=False):
     """Audio codes of one split: (track ids, array (n_tracks, n_windows, d)).
 
-    mean      unweighted mean of the 13 MERT layer vectors (d = 768)
-    whitened  the Q1 code: each layer z-scored per dimension, averaged, centred, projected on the
-              leading `whiten_dim` principal axes and scaled to unit variance; fitted on training tracks
+    mean          unweighted mean of the 13 MERT layer vectors (d = 768)
+    standardised  each layer z-scored per dimension, then averaged (d = 768); fitted on training tracks
+    whitened      standardised, centred, projected on the leading `whiten_dim` principal axes and
+                  scaled to unit variance
     """
     if smoke:
         ids, codes = _synthetic_codes()
@@ -25,14 +26,15 @@ def load_codes(config, split, smoke=False):
     variant = config["audio_code"]["variant"]
     if variant == "mean":
         codes = layers[keep].astype(np.float32).mean(axis=2)
-    elif variant == "whitened":
-        codes = _whitened(layers[splits == "train"], layers[keep], config["audio_code"]["whiten_dim"])
+    elif variant in ("standardised", "whitened"):
+        dim = config["audio_code"]["whiten_dim"] if variant == "whitened" else None
+        codes = _standardised(layers[splits == "train"], layers[keep], dim)
     else:
         raise ValueError(f"unknown code variant {variant!r}")
     return [ids[i] for i in keep], codes
 
 
-def _whitened(train_layers, layers, dim):
+def _standardised(train_layers, layers, whiten_dim=None):
     flat = train_layers.reshape(-1, *train_layers.shape[2:])
     mean = flat.mean(axis=0, dtype=np.float64).astype(np.float32)
     std = flat.std(axis=0, dtype=np.float64).astype(np.float32) + 1e-6
@@ -40,10 +42,12 @@ def _whitened(train_layers, layers, dim):
     def standardised(x):
         return ((x.astype(np.float32) - mean) / std).mean(axis=2)
 
+    if whiten_dim is None:
+        return standardised(layers)
     train = standardised(train_layers).reshape(-1, mean.shape[-1]).astype(np.float64)
     centre = train.mean(axis=0)
     eigval, eigvec = np.linalg.eigh(np.cov(train - centre, rowvar=False))
-    order = np.argsort(eigval)[::-1][:dim]
+    order = np.argsort(eigval)[::-1][:whiten_dim]
     projection = eigvec[:, order] / np.sqrt(eigval[order] + 1e-8)
     return ((standardised(layers) - centre) @ projection).astype(np.float32)
 

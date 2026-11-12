@@ -19,7 +19,8 @@ def base_parser(description):
     parser.add_argument("--config", default=str(CONFIG_PATH))
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--tag", default=None, help="appended to the run directory name")
-    parser.add_argument("--code", choices=("mean", "whitened"), default=None, help="audio code variant")
+    parser.add_argument("--code", choices=("mean", "standardised", "whitened"), default=None,
+                        help="audio code variant")
     parser.add_argument("--smoke", action="store_true",
                         help="synthetic data, randomly initialised DINOv2, few steps; checks the code path only")
     return parser
@@ -63,7 +64,7 @@ def latent_dim(config):
 
 
 def code_dim(config):
-    return 768 if config["audio_code"]["variant"] == "mean" else config["audio_code"]["whiten_dim"]
+    return config["audio_code"]["whiten_dim"] if config["audio_code"]["variant"] == "whitened" else 768
 
 
 def build_mapper(config):

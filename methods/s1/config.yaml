@@ -1,7 +1,7 @@
 # S1. Values marked (plan) are taken from S1_PLAN.md section 3.8; the others are first settings
 # that have not yet been validated by a full run.
 audio_code:
-  variant: "mean"         # mean | whitened (the Q1 code; used for the code-swap comparison)
+  variant: "mean"         # mean | standardised | whitened
   whiten_dim: 128
 
 vae:
