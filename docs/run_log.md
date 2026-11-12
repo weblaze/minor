@@ -175,3 +175,84 @@ Observations:
 - For every lambda, validation L_struct is lower at step 5500 than at step 20000 while training L_struct keeps falling. The structure term overfits the 6408 training tracks. The protocol evaluates the final step; this is not changed.
 - Selection rule, stated after seeing these values: the largest lambda whose validation L_dist is within 10 % of the lowest validation L_dist in the sweep. Lowest 0.0769; lambda 1.0 gives 0.0836 (+8.7 %), lambda 3.0 gives 0.0988 (+28.5 %). Selected: `lambda_struct` = 1.0, the configured value. The run at lambda 1.0 is the seed-0 `s1` run.
 - Mean step time 0.46 s; 2.6 h per run.
+
+## 2026-11-12 — S1 seed 0, all variants, test split
+
+| Field | Value |
+|---|---|
+| Job | `scripts/kaggle/jobs/s1_seed0.yaml` |
+| Kernel | `arunavganguly/abstraction-s1-seed0`, version 1 |
+| Commit | `8feff77` (`s1-structure`) |
+| Hardware | 2 x Tesla T4, one chain per GPU |
+| Result | completed; duration 12163 s |
+
+Seed 0, 20000 steps, `lambda_struct` 1.0, audio code: mean of 13 layers (768-d). The `s1` mapper is the lambda 1.0 run of `abstraction-s1-lambda`. 789 test tracks, 9999 permutations, k = 10 (chance overlap 0.0127). Frechet distance (FD) against 595 test images; training art 113.3, VAE reconstructions 163.0. Mean pairwise feature distance of test art 0.672; participation ratio of test art 44.8.
+
+| Variant | Mantel r | Mantel rho | kNN overlap | Trustworthiness | FD | Mean pairwise distance | Participation ratio |
+|---|---|---|---|---|---|---|---|
+| `s1` | 0.861 | 0.853 | 0.268 | 0.932 | 1172.8 | 0.342 | 14.7 |
+| `s1_cycle` | 0.839 | 0.829 | 0.250 | 0.920 | 1198.2 | 0.326 | 14.4 |
+| `s0` | 0.083 | 0.093 | 0.085 | 0.694 | 1108.7 | 0.289 | 15.7 |
+| `shuffled` | 0.140 | 0.104 | 0.049 | 0.583 | 1571.7 | 0.156 | 15.0 |
+| random M | 0.055 | 0.061 | 0.029 | 0.574 | 1877.5 | 0.118 | 18.1 |
+
+Mantel p = 0.0001 for all trained variants (minimum for 9999 permutations); random M: p = 0.0092 (Pearson), 0.0019 (Spearman).
+
+Observations:
+
+- H1 holds for seed 0: `s1` exceeds `s0`, `shuffled` and random M on Mantel correlation and kNN overlap.
+- The cycle term does not improve any structure score.
+- Outputs of every variant are far from the art distribution: FD of 1109 to 1878 against 163 for VAE reconstructions, and about half the feature spread of test art. `s0`, which has only the latent distribution term, is at 1109; the latent sliced Wasserstein term does not place outputs on the art distribution. Sample grids show texture without spatial composition.
+- One seed. Seeds 1 and 2 are not run.
+
+## 2026-11-12 — Q1 seed 0 on two VAEs, test split
+
+| Field | Value |
+|---|---|
+| Job | `scripts/kaggle/jobs/q1_seed0_vae_pair.yaml` |
+| Kernel | `arunavganguly/abstraction-q1-seed0-vae-pair`, version 1 |
+| Commit | `eaffe89` (`q1-structure`) |
+| Hardware | 2 x Tesla T4, one chain per GPU |
+| Result | completed; duration 10910 s |
+
+Variant `q1`, seed 0, 20000 steps, audio code: whitened (128-d). VAE `kl_weight` 0.3 passed the gate; `kl_weight` 0.02 failed it and was used with `--ignore-gate` (deviation from the protocol). Same test tracks, permutations and references as above.
+
+| VAE `kl_weight` | Output | Mantel r | Mantel rho | kNN overlap | Trustworthiness | FD | Mean pairwise distance | Participation ratio |
+|---|---|---|---|---|---|---|---|---|
+| 0.3 | `q1` mapper | 0.179 | 0.144 | 0.101 | 0.704 | 522.0 | 0.568 | 20.5 |
+| 0.3 | PCA alignment | 0.180 | | 0.130 | 0.732 | 742.0 | 0.299 | 11.1 |
+| 0.3 | retrieval | 0.056 | | 0.038 | 0.575 | 228.7 | 0.643 | 42.5 |
+| 0.02 | `q1` mapper | 0.259 | 0.210 | 0.152 | 0.774 | 402.1 | 0.614 | 28.9 |
+| 0.02 | PCA alignment | 0.179 | | 0.137 | 0.746 | 541.7 | 0.366 | 17.4 |
+| 0.02 | retrieval | 0.049 | | 0.044 | 0.578 | 250.6 | 0.661 | 41.8 |
+
+FD of VAE reconstructions: 576.8 (0.3), 208.5 (0.02). Final validation losses: L_global 0.824 (0.3), 0.768 (0.02).
+
+Observations:
+
+- On the gate-selected VAE (0.3) the mapper equals PCA alignment on Mantel r and is below it on kNN overlap. On the 0.02 VAE the mapper exceeds PCA alignment on every structure score and on FD. The VAE that fails the gate gives the better result on all measures.
+- Mapper FD is below the FD of the gate's prior samples for both VAEs (522.0 against 773.2; 402.1 against 974.7); the second clause of H2 holds for both. The comparison with `no_feat` is not run.
+- PCA alignment with the whitened code gives Mantel r 0.18; with the standardised code (entry of 2026-11-10) it gave 0.42. The score depends on the audio code.
+- One seed; the ablations `no_local`, `no_global`, `no_feat` and `shuffled` are not run.
+
+## 2026-11-12 — comparison of S1 and Q1 under a common audio code
+
+Computed from the `features.npz` files of the two entries above (same 789 test tracks, same order). Pearson correlation between cosine distances of image features and cosine distances of audio codes. Post hoc analysis, not part of either protocol.
+
+Correlation between the two audio distance matrices (mean code, whitened code): 0.272.
+
+| Run | r against mean code | r against whitened code |
+|---|---|---|
+| S1 `s1` | 0.861 | 0.155 |
+| S1 `s1_cycle` | 0.839 | 0.148 |
+| S1 `s0` | 0.082 | 0.098 |
+| S1 `shuffled` | 0.140 | 0.046 |
+| S1 random M | 0.055 | 0.035 |
+| Q1 `q1`, VAE 0.02 | 0.160 | 0.259 |
+| Q1 `q1`, VAE 0.3 | 0.131 | 0.179 |
+
+Observations:
+
+- Each method preserves the distance structure of the code it was trained on and little of the other. The Mantel scores of S1 and Q1 are not comparable as reported in their own entries.
+- The mean code has a participation ratio of 25.7 and the whitened code 104.7 (D1). The structure of the mean code is concentrated in fewer directions.
+- S1 reaches high structure preservation with outputs far from the art distribution (FD 1173); Q1 reaches outputs closer to the art distribution (FD 402) with low structure preservation.
