@@ -256,3 +256,50 @@ Observations:
 - Each method preserves the distance structure of the code it was trained on and little of the other. The Mantel scores of S1 and Q1 are not comparable as reported in their own entries.
 - The mean code has a participation ratio of 25.7 and the whitened code 104.7 (D1). The structure of the mean code is concentrated in fewer directions.
 - S1 reaches high structure preservation with outputs far from the art distribution (FD 1173); Q1 reaches outputs closer to the art distribution (FD 402) with low structure preservation.
+
+## 2026-11-12 — exploratory analysis of the seed-0 outputs (local)
+
+Not part of either protocol. Run on the laptop (GTX 1650) from the fetched checkpoints and embeddings; scripts are not in the repository. One seed throughout. 789 test tracks; r is the Pearson correlation between distance matrices.
+
+A. Structure measured with features other than DINOv2 (Euclidean distances between simple image statistics of the regenerated test images, against the audio code each mapper was trained on):
+
+| Feature set | S1 `s1` (mean code) | Q1 `q1`, VAE 0.02 (whitened code) |
+|---|---|---|
+| DINOv2 CLS (training target) | 0.861 | 0.259 |
+| Colour mean and standard deviation (6-d) | 0.256 | 0.102 |
+| Colour histogram (64-d) | 0.228 | 0.079 |
+| 8 x 8 layout (192-d) | 0.280 | 0.115 |
+| Radial power spectrum (63-d) | 0.144 | 0.078 |
+
+Spread of the radial power spectrum relative to test art: S1 0.42, Q1 0.66. Most of the structure reported for S1 is specific to the DINOv2 feature space.
+
+B. Mean code, leading principal axes (fitted on training windows). Variance fractions of the first six axes: 0.117, 0.073, 0.056, 0.048, 0.034, 0.031.
+
+| Axes removed from the mean code | r with S1 image distances | r with whitened-code distances |
+|---|---|---|
+| 0 | 0.861 | 0.272 |
+| 1 | 0.369 | 0.546 |
+| 2 | 0.289 | 0.580 |
+| 5 | 0.112 | 0.637 |
+| 10 | 0.027 | 0.670 |
+
+Distances computed on the first 10 axes alone correlate 0.891 with the full mean-code distances and 0.844 with S1 image distances. The structure S1 preserves lies in about ten directions of the mean code. What these directions encode is not established.
+
+C. Mapping audio codes directly to DINOv2 features (same mapper architecture, 4000 steps, batch 256, no decoder), with the output either used directly or replaced by the nearest training painting (cosine). FD against test art features; training art 113.3; participation ratio (PR) of test art 44.8.
+
+| Code | Distribution term | lambda | Direct: r | Direct: kNN | Direct: FD | Direct: PR | Nearest painting: r | kNN | FD | Distinct paintings |
+|---|---|---|---|---|---|---|---|---|---|---|
+| mean | sliced Wasserstein | 0 | 0.493 | 0.302 | 782 | 24.8 | 0.363 | 0.079 | 256 | 503 |
+| mean | sliced Wasserstein | 1 | 0.945 | 0.698 | 853 | 25.4 | 0.637 | 0.123 | 369 | 353 |
+| mean | energy distance | 1 | 0.928 | 0.588 | 819 | 24.8 | 0.648 | 0.127 | 287 | 453 |
+| mean | minibatch optimal transport | 1 | 0.488 | 0.202 | 578 | 9.5 | 0.380 | 0.115 | 300 | 392 |
+| standardised | sliced Wasserstein | 1 | 0.988 | 0.818 | 889 | 27.1 | 0.583 | 0.133 | 340 | 390 |
+| standardised | energy distance | 1 | 0.972 | 0.739 | 821 | 24.9 | 0.579 | 0.143 | 323 | 407 |
+| standardised | minibatch optimal transport | 1 | 0.506 | 0.255 | 575 | 9.3 | 0.389 | 0.140 | 297 | 382 |
+| whitened | sliced Wasserstein | 1 | 0.966 | 0.796 | 1205 | 108.1 | 0.066 | 0.039 | 541 | 263 |
+
+Observations:
+
+- No batch-level distribution term tested places the direct outputs on the art distribution (FD 575 to 1205 against 113). The outputs occupy fewer directions than art (PR about 25 against 44.8) or, for the whitened code, more (108). The weakness of the distribution term is not specific to the S1 latent space.
+- Replacing each output by the nearest training painting gives real images (FD 287 to 369; plain retrieval baseline 229 to 251) with r 0.58 to 0.65 for the mean and standardised codes. The plain retrieval baseline gave r 0.05 to 0.12 and PCA alignment 0.18 to 0.42.
+- The whitened code loses its structure when outputs are restricted to real paintings (r 0.066). Its distances are nearly uniform (coefficient of variation 0.090, D1) and its participation ratio (104.7) exceeds that of art features (44.8). D1 selects the code by same-track retrieval; this criterion does not test whether the code's geometry can be represented in the image feature space.
