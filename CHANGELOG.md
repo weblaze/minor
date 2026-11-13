@@ -17,6 +17,9 @@ Versioning scheme: `vX.Y.Z` — `X` = approach being delivered (v1 = approach 01
 - Run tag in run directory names (`system.tag`)
 - `abstraction/data/codes.py`: mean, standardised and whitened audio-code transforms, optionally over a subset of MERT layers
 - `docs/run_log.md`: record of every run on real data
+- `docs/roadmap.md`: phases and identifiers
+- `scripts/results.py`: one table of all evaluated runs of all methods (`docs/results.md`, `docs/results.csv`) and agreement between runs
+- `scripts/smoke.py`: smoke pipeline of every method on a branch
 
 ### Added (branch `s1-structure`)
 - S1: spatial VAE, mapping with latent sliced Wasserstein and distance-correlation terms, variants `s1`, `s0`, `s1_cycle`, `shuffled`, evaluation
