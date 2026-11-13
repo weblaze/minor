@@ -20,6 +20,8 @@ Set by the project owner on 2026-11-14 (second revision of that day). A bridge c
 | Method | B-time | use the sequence of windows of a track instead of one averaged code |
 | Orientation test | D-vote | majority orientation over many random initialisations |
 | Orientation test | D-ease | which orientation is learned faster or with less capacity |
+| Orientation test | D-loss | comparison of the training and validation losses of the two orientations |
+| Orientation test | D-S4 | a model trained on natural audio-visual co-occurrence scores the two orientations |
 | Orientation test | D-complexity | simple-to-simple as an imposed rule |
 | Orientation test | D-human | orientation chosen by human judges |
 | Generator | G-VAE, G-GAN, G-Diff | variational autoencoder, adversarial network, diffusion or flow model |
@@ -52,7 +54,9 @@ B-time is applied to all methods available at that point. D-human and D-complexi
 
 ## Throughout
 
-D-vote and D-ease are applied wherever they are expected to give usable data.
+D-vote, D-ease, D-loss and D-S4 are applied wherever they are expected to give usable data. D-S4 requires an S4 model and is available from phase 2.
+
+Every evaluated run is collected by `scripts/results.py` into `docs/results.md` and `docs/results.csv`; `scripts/smoke.py` runs the smoke pipeline of every method on a branch.
 
 ## After all methods
 
