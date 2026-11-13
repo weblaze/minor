@@ -576,3 +576,30 @@ Observations:
 - In all five seeds the genre ordering along the acoustic-to-electronic contrast of the audio code coincides with the ordering of the paintings along the contrast between Colour Field and Minimalism on one side and Abstract Expressionism on the other. The leading contrast of the audio code is mapped to the leading contrast of the art features.
 - The orientation is not fixed: seed 4 gives the mirror image (Folk to Abstract Expressionism, Electronic to Colour Field and Minimalism) under both codes. The objective depends on distances only and is invariant to this reflection; the mapping is identified up to symmetries of this kind. Seeds share the initialisation across codes, so the two codes are not independent trials of the orientation.
 - The assignment of individual paintings is not reproducible between seeds; the coarse correspondence is, up to orientation.
+
+## 2026-11-13 — S1 and Q1 on the standardised audio code
+
+| Field | Value |
+|---|---|
+| Job | `scripts/kaggle/jobs/std_code.yaml` |
+| Kernel | `arunavganguly/abstraction-std-code`, version 1 |
+| Commit | `6bb84a7` (`q1-structure`); S1 from a second clone at `d3b327b` (`s1-structure`) |
+| Hardware | 2 x Tesla T4, one method per GPU |
+| Result | completed; duration 11089 s |
+
+Seed 0, 20000 steps, 789 test tracks. Q1 on the VAE with `kl_weight` 0.02 (gate overridden). Rows for the mean and whitened codes are from the entries of 2026-11-12.
+
+| Method | Audio code | Mantel r | Mantel rho | kNN overlap | Trustworthiness | FD | Participation ratio |
+|---|---|---|---|---|---|---|---|
+| S1 `s1` | mean | 0.861 | 0.853 | 0.268 | 0.932 | 1172.8 | 14.7 |
+| S1 `s1` | standardised | 0.847 | 0.835 | 0.410 | 0.969 | 1364.0 | 16.1 |
+| S1 `s1` | whitened | 0.272 | 0.226 | 0.178 | 0.791 | 1172.9 | 29.7 |
+| Q1 `q1` | mean | 0.825 | 0.840 | 0.282 | 0.915 | 425.4 | 24.3 |
+| Q1 `q1` | standardised | 0.797 | 0.786 | 0.351 | 0.955 | 422.1 | 20.9 |
+| Q1 `q1` | whitened | 0.259 | 0.210 | 0.152 | 0.774 | 402.1 | 28.9 |
+
+Observations:
+
+- The standardised code gives Mantel r within 0.03 of the mean code for both methods and the highest kNN overlap and trustworthiness of the three codes (S1 0.410 against 0.268; Q1 0.351 against 0.282).
+- The distance to the art distribution is again set by the method: Q1 422, S1 1364.
+- Among the generated-image runs, Q1 on the mean or standardised code combines Mantel r of about 0.8 with FD of about 420. These are the runs with the best combination of structure and distance to the art distribution so far.
