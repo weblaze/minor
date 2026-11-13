@@ -125,6 +125,10 @@ def main():
         return
     state = Path(args.state)
     state.mkdir(parents=True, exist_ok=True)
+    if sys.platform == "win32":
+        # holds off idle sleep for as long as this process lives; no system setting is changed
+        import ctypes
+        ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000001)
     run_units(static_units(), state)
     run_units(rerun_units(state), state)
     run_units(late_units(), state)
