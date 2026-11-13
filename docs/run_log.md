@@ -576,3 +576,99 @@ Observations:
 - In all five seeds the genre ordering along the acoustic-to-electronic contrast of the audio code coincides with the ordering of the paintings along the contrast between Colour Field and Minimalism on one side and Abstract Expressionism on the other. The leading contrast of the audio code is mapped to the leading contrast of the art features.
 - The orientation is not fixed: seed 4 gives the mirror image (Folk to Abstract Expressionism, Electronic to Colour Field and Minimalism) under both codes. The objective depends on distances only and is invariant to this reflection; the mapping is identified up to symmetries of this kind. Seeds share the initialisation across codes, so the two codes are not independent trials of the orientation.
 - The assignment of individual paintings is not reproducible between seeds; the coarse correspondence is, up to orientation.
+
+## 2026-11-13 — S1 and Q1 on the standardised audio code
+
+| Field | Value |
+|---|---|
+| Job | `scripts/kaggle/jobs/std_code.yaml` |
+| Kernel | `arunavganguly/abstraction-std-code`, version 1 |
+| Commit | `6bb84a7` (`q1-structure`); S1 from a second clone at `d3b327b` (`s1-structure`) |
+| Hardware | 2 x Tesla T4, one method per GPU |
+| Result | completed; duration 11089 s |
+
+Seed 0, 20000 steps, 789 test tracks. Q1 on the VAE with `kl_weight` 0.02 (gate overridden). Rows for the mean and whitened codes are from the entries of 2026-11-12.
+
+| Method | Audio code | Mantel r | Mantel rho | kNN overlap | Trustworthiness | FD | Participation ratio |
+|---|---|---|---|---|---|---|---|
+| S1 `s1` | mean | 0.861 | 0.853 | 0.268 | 0.932 | 1172.8 | 14.7 |
+| S1 `s1` | standardised | 0.847 | 0.835 | 0.410 | 0.969 | 1364.0 | 16.1 |
+| S1 `s1` | whitened | 0.272 | 0.226 | 0.178 | 0.791 | 1172.9 | 29.7 |
+| Q1 `q1` | mean | 0.825 | 0.840 | 0.282 | 0.915 | 425.4 | 24.3 |
+| Q1 `q1` | standardised | 0.797 | 0.786 | 0.351 | 0.955 | 422.1 | 20.9 |
+| Q1 `q1` | whitened | 0.259 | 0.210 | 0.152 | 0.774 | 402.1 | 28.9 |
+
+Observations:
+
+- The standardised code gives Mantel r within 0.03 of the mean code for both methods and the highest kNN overlap and trustworthiness of the three codes (S1 0.410 against 0.268; Q1 0.351 against 0.282).
+- The distance to the art distribution is again set by the method: Q1 422, S1 1364.
+- Among the generated-image runs, Q1 on the mean or standardised code combines Mantel r of about 0.8 with FD of about 420. These are the runs with the best combination of structure and distance to the art distribution so far.
+
+## 2026-11-13 — F1 orientation across ten seeds (local)
+
+| Field | Value |
+|---|---|
+| Script | `methods/f1/orientation.py --seeds 10` |
+| Commit | `f1-feature`, script committed after the run |
+| Hardware | GTX 1650, 4 GB |
+| Result | completed; 50 mappings |
+
+For each seed: correlation between the test tracks' scores on principal axis k of the audio code and the scores of their paintings on principal axis k of the art features (k = 1, 2, 3); r of the painting output; distribution terms on validation tracks against validation art. Signs of principal axes are arbitrary, so only agreement between seeds is meaningful.
+
+Skewness of the leading three axes: mean code 0.24, -0.22, 0.57; standardised code -0.27, -0.58, 0.45; art features -0.06, -0.03, 0.16.
+
+| Code | Configuration | Abs. correlation, axis 1 (range) | Seeds with the minority sign, axis 1 | Sign split, axis 2 | r painting (range) | Painting similarity between seeds | Same orientation only | Shuffled tracks |
+|---|---|---|---|---|---|---|---|---|
+| mean | `swd` | 0.87 to 0.92 | 1 of 10 (seed 4) | 5 / 4, one near zero | 0.613 to 0.676 | 0.558 | 0.591 | 0.490 |
+| mean | `swd`, weight 5 | 0.85 to 0.91 | 2 of 10 (seeds 4, 8) | 5 / 5 | 0.608 to 0.689 | 0.508 | 0.563 | 0.465 |
+| mean | `swd`, weight 20 | 0.80 to 0.90 | 2 of 10 (seeds 4, 8) | 5 / 5 | 0.617 to 0.674 | 0.500 | 0.550 | 0.456 |
+| mean | `soft_0.02_swd` | 0.25 to 0.85 | 1 of 10 (seed 4) | 5 / 5 | 0.676 to 0.714 | 0.378 | 0.387 | 0.344 |
+| standardised | `swd` | 0.88 to 0.90 | 1 of 10 (seed 4) | 5 / 5 | 0.541 to 0.573 | 0.527 | 0.560 | 0.474 |
+
+Validation distribution terms of the minority-sign seeds lie inside the range of the other seeds (mean code, `swd`: sliced Wasserstein 0.0206 for seed 4 against 0.0175 to 0.0212; energy distance 0.248 against 0.202 to 0.259).
+
+Observations:
+
+- The first principal axis of the audio code is mapped to the first principal axis of the art features in every seed, with absolute correlation about 0.9 for the free head.
+- The orientation of the first axis has the same sign in 8 to 9 of 10 seeds. Seed 4 is in the minority under every configuration and both codes; the initial weights, which are shared across configurations, decide it. A larger weight on the distribution term does not remove the minority outcomes.
+- The second and third axes show no preferred orientation (about 5 of 10 each) and correlations between -0.85 and +0.80.
+- The validation distribution terms do not separate the two orientations. Selecting the seed with the lowest loss does not select an orientation.
+- The art features are close to symmetric along their leading axes (skewness -0.06 and -0.03). A symmetric target distribution gives the distribution term nothing to prefer one orientation over its mirror image.
+- Two seeds assign paintings to the same track with cosine similarity 0.56 to 0.59 against 0.49 for shuffled tracks. Beyond the first axis the mapping is not reproducible between seeds.
+- The soft retrieval head has the highest r of the painting output and the lowest agreement between seeds.
+
+## 2026-11-14 — F1: what limits the painting output (local, exploratory)
+
+Script not in the repository. Configuration `swd`, seed 0, 789 test tracks. r, kNN overlap and FD as in the entries above.
+
+A. Interpolation between the direct output (t = 0) and its nearest training painting (t = 1):
+
+| t | Mean code: r | kNN | FD | Standardised code: r | kNN | FD |
+|---|---|---|---|---|---|---|
+| 0 | 0.945 | 0.696 | 854 | 0.988 | 0.817 | 897 |
+| 0.25 | 0.929 | 0.621 | 651 | 0.949 | 0.703 | 663 |
+| 0.5 | 0.868 | 0.369 | 484 | 0.837 | 0.424 | 471 |
+| 0.75 | 0.765 | 0.221 | 396 | 0.696 | 0.223 | 367 |
+| 1 | 0.645 | 0.132 | 384 | 0.573 | 0.136 | 344 |
+
+B. Gallery size, with galleries sampled from a Gaussian fitted to the training-art features (FD of 4666 such samples to test art: 123; training art: 113):
+
+| Gallery | Mean code: displacement | r | FD | Standardised code: displacement | r | FD |
+|---|---|---|---|---|---|---|
+| 4666 real paintings | 0.360 | 0.645 | 384 | 0.375 | 0.573 | 344 |
+| 4666 Gaussian samples | 0.383 | 0.643 | 390 | 0.395 | 0.564 | 358 |
+| 46660 Gaussian samples | 0.358 | 0.697 | 330 | 0.369 | 0.623 | 310 |
+| 466600 Gaussian samples | 0.338 | 0.724 | 333 | 0.349 | 0.665 | 315 |
+
+C. Mean of the k nearest paintings (not a real painting for k > 1): mean code r 0.686 (k = 2), 0.700 (4), 0.706 (8), 0.704 (16) with FD 427 to 663; standardised code 0.643, 0.676, 0.689, 0.693 with FD 402 to 642.
+
+D. Displacement. Length of the displacement relative to the length of the output: 0.84 (mean code), 0.86 (standardised). Cosine between displacement and output: -0.44 for both. Replacing the displacement by a random vector of the same length drawn with the art covariance gives r 0.707 (mean code) and 0.555 (standardised).
+
+E. Density of the collection (cosine distance to the nearest other painting): test painting to nearest training painting 0.250 (quartiles 0.195, 0.251, 0.313); training painting to nearest other training painting 0.255; mean distance between two training paintings 0.687. The outputs of the mapping are at 0.36 to 0.38 from their nearest painting.
+
+Observations:
+
+- Structure and distance to the art distribution trade off along a smooth curve between the direct output and the nearest painting. At FD about 425 the curve gives r about 0.80 (mean code); Q1 on the mean code reached r 0.825 at FD 425 with a trained generator. The generated-image result and the retrieval result lie on one trade-off curve.
+- A Gaussian model of the art features reproduces the retrieval result at the real gallery size (r 0.643 against 0.645). In this model ten times more paintings add 0.05 in r and a hundred times more add 0.08. The limit of the painting output is the sparsity of a finite collection in a feature space with about 45 effective dimensions; it falls slowly with collection size.
+- The collection is sparse for real paintings as well: a held-out painting is at cosine distance 0.25 from its nearest neighbour, more than a third of the mean distance between two paintings. The outputs of the mapping are further out (0.36 to 0.38) and their displacement points partly back toward the origin.
+- A displacement of this length accounts for the loss in r whether it points to the nearest painting or in a random direction: the loss comes from the size of the move, not from a systematic distortion.
