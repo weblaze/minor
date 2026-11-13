@@ -96,6 +96,11 @@ def neighbour_kl(d_source, d_target, temperature=0.5):
     return (ls.exp() * (ls - lt).masked_fill(mask, 0.0)).sum(1).mean()
 
 
+def energy_distance_np(x, y):
+    x, y = torch.as_tensor(x, dtype=torch.float32), torch.as_tensor(y, dtype=torch.float32)
+    return float(2 * torch.cdist(x, y).mean() - torch.cdist(x, x).mean() - torch.cdist(y, y).mean())
+
+
 def critic_net():
     sn = nn.utils.spectral_norm
     return nn.Sequential(sn(nn.Linear(FEATURE_DIM, 512)), nn.LeakyReLU(0.2), sn(nn.Linear(512, 512)),
