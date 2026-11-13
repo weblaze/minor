@@ -1,48 +1,70 @@
 # Roadmap
 
-Set by the project owner on 2026-11-14. Names of bridges, generators and encoders follow the scheme used in the planning notes: a bridge connects music to images, a generator produces the image.
+Set by the project owner on 2026-11-14 (second revision of that day). A bridge connects music to images; a generator produces the image; an encoder turns audio or an image into a vector.
 
-## Phase 1: structure transfer (S1, Q1, F1) with a VAE generator
+## Identifiers
 
-Status: experiments complete once the Q1 seed and control runs of 2026-11-14 are fetched and logged.
+| Kind | Identifier | Meaning |
+|---|---|---|
+| Bridge | S0 | cycle consistency (2025 pipeline) |
+| Bridge | S1 | structure-preserving mapping into a VAE latent |
+| Bridge | Q1 | S1 with a vector VAE and a feature-space distribution term |
+| Bridge | F1 | mapping into image-feature space with nearest-painting retrieval |
+| Bridge | S2 | blind matching of the two spaces by shape |
+| Bridge | S3 | self-invented visual language (information maximisation) |
+| Bridge | S4 | natural audio-visual statistics: how sound and sight co-occur in real-world video |
+| Bridge | S5 | human-made co-occurrence (album covers, film scores) |
+| Bridge | S6 | human preference as a training signal |
+| Method | B-anchor | settling the orientation of the mapping, judged by the machine |
+| Method | B-cluster | cluster both collections, then align groups to groups |
+| Method | B-time | use the sequence of windows of a track instead of one averaged code |
+| Orientation test | D-vote | majority orientation over many random initialisations |
+| Orientation test | D-ease | which orientation is learned faster or with less capacity |
+| Orientation test | D-complexity | simple-to-simple as an imposed rule |
+| Orientation test | D-human | orientation chosen by human judges |
+| Generator | G-VAE, G-GAN, G-Diff | variational autoencoder, adversarial network, diffusion or flow model |
+| Encoder | E-MERT, E-DINOv2 | in use |
+| Encoder | E-other-music, E-2nd-image | other text-free encoders, not yet used |
 
-Content:
+## Phase 1: S0, S1, Q1, F1, S2 with G-VAE
 
-- S1: mapping into a spatial VAE latent, latent distribution term, distance-correlation term.
-- Q1: vector VAE, feature-space distribution term, global and local structure terms, diagnostics and baselines.
-- F1: mapping into DINOv2 feature space with nearest-painting retrieval; diagnosis, experiment grid, orientation across seeds, retrieval limit.
-- Audio codes: mean, standardised, whitened; relation of the leading axes to FMA metadata.
+Status: experiments conclude when the Q1 seed and control runs of 2026-11-14 are fetched and logged.
 
-Closing steps:
+Remaining steps:
 
 1. Fetch and log `abstraction-q1-mean-seeds12` and `abstraction-q1-mean-controls`.
-2. Assemble methods, data, protocol deviations, results and negative results from `docs/run_log.md` into a paper outline.
-3. Draft the paper.
+2. Combination sweep of the mapper techniques (structure terms, distribution terms, output heads, audio codes) with each approach. A combination is excluded only when the existing results make its failure certain.
+3. Assemble data, protocol, deviations, results and negative results from `docs/run_log.md`.
+4. First paper. A comparison paper follows if the material supports it.
+5. Human judging of the phase 1 systems.
 
-Not done in phase 1 and stated as limitations: evaluation with a second image encoder, human evaluation, DEAM valence and arousal analysis, psychophysics probes, seeds beyond those listed in the run log.
+## Phase 2: S4, then S3
 
-## Phase 2: bridges without human involvement, GAN then diffusion
+For each bridge: G-GAN first, then G-Diff and other diffusion or flow methods. The phase ends with a comparison of G-VAE, G-GAN and G-Diff, and with human judging.
 
-Order:
+## Phase 2.5: B-anchor and B-cluster
 
-1. S4: bridge from natural audio-visual co-occurrence (video of the physical world; no text, no human pairing of music and images).
-2. S3: bridge by information maximisation (the generator produces images from which the audio code can be recovered).
+Applied to all methods available at that point.
 
-Generators, for each bridge in this order:
+## Phase 3: S5, then S6, then B-time
 
-1. G-GAN.
-2. G-Diff and other diffusion or flow-based generators.
+B-time is applied to all methods available at that point. D-human and D-complexity are carried out in this phase first and may then be applied to earlier methods once all methods exist. The phase ends with human judging.
 
-Comparison at the end of the phase: G-VAE (phase 1), G-GAN and G-Diff under the same bridges, on structure, distance to the art distribution and reproducibility across seeds.
+## Throughout
 
-## Phase 3: human involvement
+D-vote and D-ease are applied wherever they are expected to give usable data.
 
-All work that uses human judgement or human-made pairings is collected in this phase:
+## After all methods
 
-- S5: bridge from human-made co-occurrence (album covers, film scores).
-- S6: human preference as a training signal.
-- Human evaluation of the phase 1 and phase 2 systems (two-alternative forced choice; includes the orientation question raised by the F1 seed study).
+- E-other-music and E-2nd-image. The second image encoder is tested on a selected few methods to measure whether a change of encoder changes the outcome.
+- Validation against human knowledge, at the very end: emotion ratings (DEAM), psychophysics probes and colour psychology, to establish which known relations the machine reached without being given them and which other relations it found.
 
-## Later
+## Last
 
-Creative extensions (unconditional sampling, several images per track, temporal sequences), image content beyond abstract art, and a single `generate(audio) -> image` interface with bridge and generator selected by configuration.
+Creative extensions: sampling without audio, several interpretations of one track, self-directed learning from its own outputs, temporal sequences, image content beyond abstract art, an abstraction control, and a single `generate(audio) -> image` interface with bridge and generator selected by configuration.
+
+## Excluded
+
+- Text-supervised encoders and pipelines (CLAP, CLIP, ImageBind, captions, mood words).
+- Hand-written correspondences between signal properties of sound and image.
+- CycleGAN-style unpaired translation.
