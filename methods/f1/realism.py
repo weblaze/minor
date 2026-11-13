@@ -82,6 +82,27 @@ GRID = {
 }
 DEFAULT = {"head": "free", "dist": SWD, "struct": GLOBAL, "noise": 0, "batch": 256, "tau": 0.05, "k": 64}
 
+SWEEP_HEADS = {"free": {}, "pca64": {"head": "pca", "k": 64}, "soft05": {"head": "soft", "tau": 0.05},
+               "soft02": {"head": "soft", "tau": 0.02}, "st05": {"head": "st", "tau": 0.05}}
+SWEEP_DIST = {"swd1": [["swd", 1.0]], "swd5": [["swd", 5.0]], "energy1": [["energy", 1.0]],
+              "swd1_energy1": [["swd", 1.0], ["energy", 1.0]], "swd1_chamfer01": [["swd", 1.0], ["chamfer", 0.1]]}
+SWEEP_STRUCT = {"global": [["global", 1.0]], "global_local": [["global", 1.0], ["local", 1.0]],
+                "global_views": [["global", 0.5], ["views", 0.5]], "global3": [["global", 3.0]]}
+
+
+def sweep_grid():
+    """Combinations of output head, distribution term and structure term.
+
+    Left out because the grid of 2026-11-13 showed them to fail: no distribution term, the critic,
+    chamfer as the only distribution term, straight-through retrieval without a distribution term.
+    """
+    grid = {}
+    for head, head_spec in SWEEP_HEADS.items():
+        for dist, dist_spec in SWEEP_DIST.items():
+            for struct, struct_spec in SWEEP_STRUCT.items():
+                grid[f"{head}__{dist}__{struct}"] = {**head_spec, "dist": dist_spec, "struct": struct_spec}
+    return grid
+
 
 def neighbour_kl(d_source, d_target, temperature=0.5):
     """KL divergence between row-wise neighbour distributions; distances divided by their mean."""
@@ -134,7 +155,7 @@ class Head:
         return hard + soft - soft.detach(), raw
 
 
-def fit(spec, config, codes, views, gallery, device, steps, seed):
+def fit(spec, config, codes, views, gallery, device, steps, seed, history=None):
     hp = config["mapper"]
     torch.manual_seed(seed)
     g = torch.Generator().manual_seed(seed)
@@ -155,7 +176,7 @@ def fit(spec, config, codes, views, gallery, device, steps, seed):
             x = torch.cat([x, noise], dim=1)
         return head(mapper(x))
 
-    for _ in range(steps):
+    for step in range(steps):
         tracks = torch.randperm(codes.shape[0], generator=g)[:batch].to(device)
         windows = torch.randint(codes.shape[1], (batch,), generator=g).to(device)
         x = codes[tracks, windows]
@@ -174,6 +195,10 @@ def fit(spec, config, codes, views, gallery, device, steps, seed):
                 loss = loss + weight * sliced_wasserstein(out / scale, real / scale, hp["swd_projections"])
             elif term == "critic":
                 loss = loss - weight * critic(out / scale).mean()
+            elif term == "energy":
+                a, b = out / scale, real / scale
+                loss = loss + weight * (2 * torch.cdist(a, b).mean() - torch.cdist(a, a).mean()
+                                        - torch.cdist(b, b).mean())
             elif term == "chamfer":
                 reference = gallery[torch.randint(gallery.shape[0], (2048,), generator=g).to(device)]
                 loss = loss + weight * (torch.cdist(out / scale, reference / scale).min(1).values.mean()
@@ -193,6 +218,10 @@ def fit(spec, config, codes, views, gallery, device, steps, seed):
         optimiser.zero_grad(set_to_none=True)
         loss.backward()
         optimiser.step()
+        if history is not None and step % 100 == 0:
+            with torch.no_grad():
+                history.append([step, float(1 - distance_correlation_loss(pairwise_distances(x), d_out)),
+                                float(sliced_wasserstein(out / scale, real / scale, hp["swd_projections"]))])
     mapper.eval()
     return forward
 
@@ -234,13 +263,16 @@ def main():
     parser = base_parser(__doc__)
     parser.add_argument("--only", nargs="+", default=None)
     parser.add_argument("--steps", type=int, default=None)
+    parser.add_argument("--grid", choices=("named", "sweep"), default="named",
+                        help="named: GRID; sweep: combinations from sweep_grid()")
     args = parser.parse_args()
     config, device = setup(args)
     seed = config["system"]["seed"]
     steps = args.steps or (40 if args.smoke else config["mapper"]["steps"])
     set_seed(seed)
-    names = args.only or list(GRID)
-    config["run"] = {"steps": steps, "grid": {name: {**DEFAULT, **GRID[name]} for name in names}}
+    grid = GRID if args.grid == "named" else sweep_grid()
+    names = args.only or list(grid)
+    config["run"] = {"steps": steps, "grid": {name: {**DEFAULT, **grid[name]} for name in names}}
     log = RunLog(config["paths"]["runs_dir"], run_name("realism", args.smoke), config, seed)
 
     _, layers, splits = load_layers(config, args.smoke)
@@ -258,7 +290,7 @@ def main():
 
     results = {}
     for name in names:
-        spec = {**DEFAULT, **GRID[name]}
+        spec = {**DEFAULT, **grid[name]}
         forward = fit(spec, config, train, train_views, gallery, device, steps, seed)
         results[name] = score(forward, test, test_views, gallery, test_art, pixel_stats, config["eval"]["knn_k"])
         log.save_json("results.json", results)

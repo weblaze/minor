@@ -10,6 +10,8 @@ have the same structure loss. This script trains one mapping per seed and record
   val_swd, val_energy   distribution terms between the outputs for validation tracks and the
               features of validation art (not used in training)
   val_struct  1 - Pearson of distance matrices on validation tracks (direct output)
+  history     every 100 steps: step, Pearson correlation of the distance matrices of the batch,
+              sliced Wasserstein distance of the batch
 
 and, between seeds, the mean cosine similarity of the two paintings assigned to the same track.
 If one orientation has a consistently lower validation distribution term, the data determine
@@ -34,7 +36,7 @@ from abstraction.metrics.structure import distance_matrix
 from abstraction.utils.runlog import RunLog, set_seed
 
 from common import base_parser, codes_of, correlation, load_art, load_layers, run_name, setup
-from realism import DEFAULT, GRID, energy_distance_np, fit
+from realism import DEFAULT, GRID, VIEWS, energy_distance_np, fit, sweep_grid
 
 EXTRA = {"swd_w5": {"dist": [["swd", 5.0]]}, "swd_w20": {"dist": [["swd", 20.0]]}}
 N_AXES = 3
@@ -52,8 +54,15 @@ def main():
     parser.add_argument("--configs", nargs="+", default=["swd"])
     parser.add_argument("--seeds", type=int, default=10)
     parser.add_argument("--steps", type=int, default=None)
+    parser.add_argument("--first-seed", type=int, default=0)
+    parser.add_argument("--hidden", type=int, default=None, help="width of the mapping network")
+    parser.add_argument("--depth", type=int, default=None, help="number of blocks of the mapping network")
     args = parser.parse_args()
     config, device = setup(args)
+    if args.hidden:
+        config["mapper"]["hidden"] = args.hidden
+    if args.depth:
+        config["mapper"]["depth"] = args.depth
     steps = args.steps or (40 if args.smoke else config["mapper"]["steps"])
     set_seed(0)
     config["run"] = {"steps": steps, "configs": args.configs, "seeds": args.seeds}
@@ -67,6 +76,8 @@ def main():
     codes, _ = codes_of(layers, splits, code["variant"], code["whiten_dim"], code["layers"])
     to = lambda x: torch.from_numpy(x).to(device)
     train = to(codes[splits == "train"])
+    train_views = [to(codes_of(layers, splits, "standardised", code["whiten_dim"], [i])[0][splits == "train"])
+                   for i in VIEWS]
     val, test = to(codes[splits == "val"].mean(axis=1)), to(codes[splits == "test"].mean(axis=1))
     test_np = test.cpu().numpy()
     d_audio = distance_matrix(test_np)
@@ -82,10 +93,11 @@ def main():
     scale = float(gallery_np.std())
     results = {}
     for name in args.configs:
-        spec = {**DEFAULT, **{**GRID, **EXTRA}[name]}
+        spec = {**DEFAULT, **{**GRID, **EXTRA, **sweep_grid()}[name]}
         rows, picks = [], []
-        for seed in range(args.seeds):
-            forward = fit(spec, config, train, [], gallery, device, steps, seed)
+        for seed in range(args.first_seed, args.first_seed + args.seeds):
+            history = []
+            forward = fit(spec, config, train, train_views, gallery, device, steps, seed, history)
             with torch.no_grad():
                 _, query = forward(test)
                 nearest = (F.normalize(query, dim=1) @ F.normalize(gallery, dim=1).T).argmax(1).cpu().numpy()
@@ -97,7 +109,8 @@ def main():
             corr = [float(np.corrcoef(audio_scores[:, k], painting_scores[:, k])[0, 1]) for k in range(N_AXES)]
             rows.append({"seed": seed, "corr": corr, "r_painting": correlation(d_audio, distance_matrix(gallery_np[nearest])),
                          "val_swd": val_swd, "val_energy": energy_distance_np(out_val.cpu().numpy() / scale, val_art / scale),
-                         "val_struct": val_struct, "distinct": int(len(np.unique(nearest)))})
+                         "val_struct": val_struct, "distinct": int(len(np.unique(nearest))),
+                         "history": history})
             picks.append(nearest)
             results[name] = {"seeds": rows}
             log.save_json("results.json", results)
