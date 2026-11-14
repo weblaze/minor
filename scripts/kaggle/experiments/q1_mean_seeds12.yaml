@@ -1,0 +1,21 @@
+# Experiment description for scripts/kaggle/make_job.py. Reproduces scripts/kaggle/jobs/q1_mean_seeds12.yaml:
+#   python scripts/kaggle/make_job.py scripts/kaggle/experiments/q1_mean_seeds12.yaml --compare scripts/kaggle/jobs/q1_mean_seeds12.yaml
+description: Q1 variant q1 on the mean code, seeds 1 and 2 (VAE kl_weight 0.02, gate overridden). One seed per GPU.
+name: abstraction-q1-mean-seeds12
+branch: q1-structure
+kernels:
+  - "{user}/abstraction-features"
+  - "{user}/abstraction-q1-vae"
+inputs:
+  MERT: mert_embeddings
+  ART_ZIP: abstract_art.zip
+  Q1_VAE: q1_vae_seed0_20261110T155658Z
+setup:
+  - nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+  - python -m zipfile -e {ART_ZIP} datasets/
+  - ln -s {MERT} datasets/mert_embeddings
+chains:
+  - - q1 train_mapper --seed 1 --code mean --tag meancode --vae {Q1_VAE}/vae.pt --variant q1 --ignore-gate
+    - q1 evaluate --seed 1 --tag meancode --vae {Q1_VAE}/vae.pt --mapper runs/q1_mapper_q1_meancode_seed1_*/mapper.pt
+  - - q1 train_mapper --seed 2 --code mean --tag meancode --vae {Q1_VAE}/vae.pt --variant q1 --ignore-gate
+    - q1 evaluate --seed 2 --tag meancode --vae {Q1_VAE}/vae.pt --mapper runs/q1_mapper_q1_meancode_seed2_*/mapper.pt
