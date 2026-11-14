@@ -1,0 +1,34 @@
+# F1. Mapping from audio codes to DINOv2 image features; no image decoder.
+# None of these values has been validated beyond the exploratory runs of 2026-11-12 (docs/run_log.md).
+audio_code:
+  variant: "standardised"   # mean | standardised | whitened
+  whiten_dim: 128
+  layers: null              # list of MERT layer indices (0 to 12); null = all 13
+
+mapper:
+  hidden: 1024
+  depth: 3
+  batch_size: 256           # tracks per batch, one window per track
+  real_batch_size: 256
+  lr: 1.0e-4
+  steps: 4000
+  distribution_term: "swd"  # swd | energy | none
+  swd_projections: 256
+  lambda_struct: 1.0
+  val_every: 500
+
+diagnose:
+  codes:                    # [name, variant, layers]
+    - ["mean", "mean", null]
+    - ["standardised", "standardised", null]
+    - ["whitened", "whitened", null]
+    - ["layer 0", "standardised", [0]]
+    - ["layer 3", "standardised", [3]]
+    - ["layer 6", "standardised", [6]]
+    - ["layer 9", "standardised", [9]]
+    - ["layer 12", "standardised", [12]]
+  gallery_sizes: [500, 1000, 2000]
+
+eval:
+  knn_k: 10
+  n_permutations: 9999
