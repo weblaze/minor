@@ -795,3 +795,14 @@ Observations:
 - The straight-through head with chamfer has the highest r and the lowest kNN overlap for the mean code (0.079): global structure improves while neighbourhoods degrade.
 - The multi-layer structure term lowers r for the mean code and leaves it unchanged for the standardised code. The local term and the larger structure weight change r by 0.01 or less on average.
 - No combination exceeds r 0.76 with several hundred distinct paintings; the limit set by the sparsity of the collection (entry of 2026-11-14 above) remains.
+
+## 2026-11-14 — corrections and reference values
+
+Earlier entries are left as written. This entry resolves inconsistencies between them.
+
+- S1 `s0`, Mantel r: 0.083 in "S1 seed 0, all variants, test split" and 0.082 in "comparison of S1 and Q1 under a common audio code". Both are roundings of the same value, 0.0825. Reference: 0.083 (the value written by `evaluate.py`).
+- Commit of the F1 variant runs: "F1 variants and controls, seed 0 (local)" gives `aa6783c` for all runs. The `f1` and `f0` runs were made before that commit, on a working tree with the F1 files uncommitted; their `meta.json` records `4234cad`, which `docs/results.md` reports. The `shuffled` and random M runs were made at `aa6783c`. The code of the four runs is identical.
+- F1 baseline (`free` head, sliced Wasserstein, global structure term), r of the painting output, seed 0. Mean code: 0.644 (`diagnose.py`), 0.645 (`realism.py`, `orientation.py`), 0.637 (exploratory precursor with a different batch composition). Standardised code: 0.572 (`diagnose.py`), 0.573 (`realism.py`), 0.578 (`train_mapper.py` and `evaluate.py`, which draw batches in a different order). Reference values: the five-seed means of the batch of 2026-11-14, 0.641 (0.013) for the mean code and 0.556 (0.011) for the standardised code; single-seed reference 0.645 and 0.573 (`realism.py`).
+- Variance fraction of the first principal axis of the mean code: 0.117 in "exploratory analysis of the seed-0 outputs", where the axes are fitted on individual training windows, and 0.130 in "audio-code axes against FMA metadata", where they are fitted on window-averaged training tracks. Both are correct for their definition. The orientation analyses use window-averaged training tracks.
+- Selection of combinations in "F1 batch at the end of phase 1": the selection rule used scores on the test tracks. The sweep is repeated with selection on the validation tracks (`methods/f1/phase1_validation.py`); its result is logged separately.
+- The scripts of the exploratory entries are now in `analysis/exploratory/`, with a table that maps each script to its entry.
