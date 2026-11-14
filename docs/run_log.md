@@ -672,3 +672,126 @@ Observations:
 - A Gaussian model of the art features reproduces the retrieval result at the real gallery size (r 0.643 against 0.645). In this model ten times more paintings add 0.05 in r and a hundred times more add 0.08. The limit of the painting output is the sparsity of a finite collection in a feature space with about 45 effective dimensions; it falls slowly with collection size.
 - The collection is sparse for real paintings as well: a held-out painting is at cosine distance 0.25 from its nearest neighbour, more than a third of the mean distance between two paintings. The outputs of the mapping are further out (0.36 to 0.38) and their displacement points partly back toward the origin.
 - A displacement of this length accounts for the loss in r whether it points to the nearest painting or in a random direction: the loss comes from the size of the move, not from a systematic distortion.
+
+## 2026-11-14 — Q1 on the mean code: seeds 1 and 2, variants shuffled and no_feat
+
+| Field | Value |
+|---|---|
+| Jobs | `scripts/kaggle/jobs/q1_mean_seeds12.yaml`, `scripts/kaggle/jobs/q1_mean_controls.yaml` |
+| Kernels | `arunavganguly/abstraction-q1-mean-seeds12`, `arunavganguly/abstraction-q1-mean-controls`, version 1 each |
+| Commit | `648394a` (`q1-structure`) |
+| Hardware | 2 x Tesla T4 per job, one run per GPU |
+| Result | completed; durations 10395 s and 10338 s |
+
+Mean code, 20000 steps, VAE with `kl_weight` 0.02 (gate overridden), 789 test tracks. Seed 0 of `q1` is from the code-swap entry of 2026-11-12.
+
+| Variant | Seed | Mantel r | Mantel rho | kNN overlap | Trustworthiness | FD | Participation ratio | Mean pairwise distance |
+|---|---|---|---|---|---|---|---|---|
+| `q1` | 0 | 0.825 | 0.840 | 0.282 | 0.915 | 425.4 | 24.3 | 0.601 |
+| `q1` | 1 | 0.815 | 0.834 | 0.285 | 0.920 | 409.0 | 24.9 | 0.600 |
+| `q1` | 2 | 0.818 | 0.836 | 0.290 | 0.922 | 409.7 | 23.7 | 0.598 |
+| `shuffled` | 0 | 0.209 | 0.208 | 0.163 | 0.823 | 405.5 | 30.1 | 0.657 |
+| `no_feat` | 0 | 0.869 | 0.873 | 0.392 | 0.965 | 675.2 | 21.6 | 0.305 |
+
+Agreement between the three `q1` seeds (local analysis of the `features.npz` files): Pearson correlation between the image distance matrices 0.847 to 0.854; cosine similarity between the image features of the same track 0.415 to 0.528 against 0.400 to 0.410 for shuffled tracks. Correlation between the test tracks' scores on principal axis 1 of the audio code and of their images on principal axis 1 of the art features: -0.43, -0.85, -0.91 (same sign in the three seeds); `shuffled` -0.04; `no_feat` 0.00.
+
+Observations:
+
+- `q1` on the mean code is stable over three seeds: Mantel r 0.815 to 0.825, FD 409 to 425.
+- `shuffled` falls to r 0.209: the structure of `q1` depends on the true audio distances.
+- H2, first clause: FD of `q1` (409 to 425) is below FD of `no_feat` (675). The feature-space distribution term costs 0.05 in Mantel r and 0.11 in kNN overlap.
+- The three seeds agree as geometries (0.85) and in the orientation of the first axis, and assign different images to the same track.
+
+## 2026-11-14 — F1 batch at the end of phase 1: orientation votes, combination sweep, reruns (local)
+
+| Field | Value |
+|---|---|
+| Script | `methods/f1/phase1_batch.py` |
+| Commit | `4b57977` (`f1-feature`) |
+| Hardware | GTX 1650, 4 GB |
+| Result | completed; 34 units, no failure, 7 h 2 min |
+
+A. Orientation over random initialisations (`orientation.py`, configuration `swd` unless stated). Sign of the correlation between audio and painting scores on principal axis k; counts of the negative sign. Principal axes are the same within a code, so signs are comparable across network sizes.
+
+| Code | Mapping network | Seeds | Axis 1 negative | Axis 2 negative | Axis 3 negative | Mean abs. correlation, axes 1, 2, 3 | r painting, mean (sd) |
+|---|---|---|---|---|---|---|---|
+| mean | 1024 x 3 | 50 | 40 | 26 | 7 | 0.89, 0.52, 0.38 | 0.646 (0.015) |
+| mean | 256 x 3 | 20 | 11 | 10 | 2 | 0.84, 0.32, 0.34 | 0.639 (0.015) |
+| mean | 1024 x 1 | 20 | 14 | 11 | 0 | 0.85, 0.42, 0.32 | 0.636 (0.015) |
+| mean | 2048 x 3 | 20 | 13 | 12 | 2 | 0.88, 0.53, 0.40 | 0.642 (0.017) |
+| mean, `soft_0.02_swd` | 1024 x 3 | 20 | 14 | 11 | 0 | 0.65, 0.43, 0.35 | 0.703 (0.014) |
+| standardised | 1024 x 3 | 50 | 16 | 26 | 24 | 0.89, 0.52, 0.35 | 0.556 (0.010) |
+
+Pooled over the five mean-code settings: axis 1 negative in 92 of 130 runs (71 %), axis 2 in 70 of 130 (54 %), axis 3 positive in 119 of 130 (92 %). For the standardised code the majority sign of axis 1 holds in 34 of 50 runs (68 %). The same seed gives the majority or the minority sign under both codes in 44 of 50 cases; between network sizes the same seed agrees in 9 to 12 of 20 cases.
+
+Majority against minority orientation of axis 1 (mean code, 1024 x 3, 40 and 10 seeds):
+
+| Quantity | Majority | Minority |
+|---|---|---|
+| r painting | 0.647 | 0.643 |
+| Validation sliced Wasserstein | 0.0190 | 0.0188 |
+| Validation energy distance | 0.2265 | 0.2249 |
+| Validation structure loss | 0.0523 | 0.0525 |
+| Batch distance correlation at step 100 / 300 / 1000 / 3900 | 0.935 / 0.958 / 0.979 / 0.987 | 0.934 / 0.955 / 0.979 / 0.988 |
+| Batch sliced Wasserstein at step 1000 / 3900 | 0.0374 / 0.0270 | 0.0364 / 0.0268 |
+
+The same comparison for the standardised code and for the other network sizes shows differences of the same size or smaller.
+
+Observations:
+
+- D-vote: one orientation of axis 1 is reached more often than the other in every setting (55 % to 80 %; pooled 71 % for the mean code, 68 % for the standardised code). The preference is present and is not decisive. It weakens for the smaller and the larger network.
+- D-ease and D-loss: the two orientations are learned at the same speed and reach the same losses. Neither test separates them.
+- Axis 3 of the mean code has a stable orientation (92 %). Its audio scores are the most skewed of the three axes (0.57) and the art axis is the most skewed of the three (0.16). Axis 2, where the art axis has skewness -0.03, shows no preference. For the standardised code axis 3 shows no preference (24 of 50).
+- The orientation is set by the initial weights: the same seed lands on the same side for both codes (44 of 50) and not across network sizes.
+- r of the painting output has a standard deviation of 0.010 to 0.017 over seeds.
+
+B. Combination sweep (`realism.py --grid sweep`, seed 0): 100 combinations per code of output head (free, pca64, soft05, soft02, st05), distribution term (swd1, swd5, energy1, swd1_energy1, swd1_chamfer01) and structure term (global, global_local, global_views, global3). Full rows are in the run directories `f1_realism_sweep_*`.
+
+Means over the 20 or 25 combinations sharing a component (r, kNN overlap and FD of the painting output; distinct paintings; mean r under pixel-based features):
+
+| Component | Mean code: r | kNN | FD | Distinct | Pixel r | Standardised: r | kNN | FD | Distinct | Pixel r |
+|---|---|---|---|---|---|---|---|---|---|---|
+| head free | 0.626 | 0.126 | 405 | 347 | 0.148 | 0.556 | 0.137 | 406 | 356 | 0.174 |
+| head pca64 | 0.604 | 0.115 | 300 | 475 | 0.111 | 0.547 | 0.138 | 300 | 480 | 0.129 |
+| head soft05 | 0.592 | 0.128 | 655 | 173 | 0.075 | 0.575 | 0.162 | 712 | 170 | 0.164 |
+| head soft02 | 0.675 | 0.135 | 401 | 325 | 0.058 | 0.604 | 0.169 | 456 | 280 | 0.157 |
+| head st05 | 0.693 | 0.110 | 498 | 268 | 0.124 | 0.611 | 0.147 | 374 | 348 | 0.186 |
+| dist swd1 | 0.622 | 0.121 | 451 | 334 | 0.128 | 0.575 | 0.146 | 416 | 367 | 0.159 |
+| dist swd5 | 0.643 | 0.127 | 426 | 328 | 0.082 | 0.591 | 0.151 | 442 | 333 | 0.159 |
+| dist energy1 | 0.633 | 0.125 | 420 | 336 | 0.074 | 0.583 | 0.154 | 433 | 324 | 0.160 |
+| dist swd1_energy1 | 0.636 | 0.125 | 419 | 340 | 0.077 | 0.581 | 0.155 | 433 | 329 | 0.161 |
+| dist swd1_chamfer01 | 0.656 | 0.116 | 543 | 250 | 0.156 | 0.562 | 0.147 | 524 | 281 | 0.171 |
+| struct global | 0.654 | 0.118 | 461 | 306 | 0.108 | 0.586 | 0.150 | 459 | 319 | 0.166 |
+| struct global_local | 0.646 | 0.125 | 425 | 331 | 0.102 | 0.569 | 0.155 | 428 | 336 | 0.153 |
+| struct global_views | 0.597 | 0.129 | 443 | 329 | 0.083 | 0.585 | 0.147 | 470 | 311 | 0.161 |
+| struct global3 | 0.655 | 0.119 | 479 | 305 | 0.120 | 0.574 | 0.149 | 442 | 341 | 0.169 |
+
+Collapsed combinations (fewer than 100 distinct paintings): 7 (mean code), 5 (standardised). Combinations meeting the selection rule (at least 300 distinct paintings, FD at most 450): 58 and 54.
+
+C. Reruns of the selected combinations, seeds 0 to 4 (mean and standard deviation over five seeds). Selection rule as fixed in `phase1_batch.py`; the baseline is `free__swd1__global`.
+
+| Code | Combination | r painting | kNN overlap | FD | Distinct |
+|---|---|---|---|---|---|
+| mean | `free__swd1__global` (baseline) | 0.641 (0.013) | 0.122 (0.006) | 346 (20) | 371 |
+| mean | `st05__swd1_chamfer01__global` | 0.747 (0.007) | 0.079 (0.003) | 375 (28) | 330 |
+| mean | `st05__swd1_chamfer01__global_local` | 0.743 (0.023) | 0.090 (0.004) | 364 (43) | 338 |
+| mean | `soft02__swd1_chamfer01__global3` | 0.737 (0.012) | 0.145 (0.004) | 340 (19) | 359 |
+| mean | `st05__swd1_energy1__global` | 0.717 (0.010) | 0.128 (0.004) | 342 (9) | 358 |
+| mean | `st05__energy1__global_local` | 0.704 (0.018) | 0.128 (0.004) | 371 (11) | 323 |
+| standardised | `free__swd1__global` (baseline) | 0.556 (0.011) | 0.137 (0.006) | 338 (11) | 394 |
+| standardised | `st05__swd1_chamfer01__global3` | 0.641 (0.006) | 0.132 (0.006) | 393 (8) | 389 |
+| standardised | `st05__energy1__global` | 0.623 (0.013) | 0.164 (0.006) | 300 (3) | 387 |
+| standardised | `st05__swd1_energy1__global` | 0.620 (0.007) | 0.163 (0.003) | 293 (6) | 399 |
+| standardised | `st05__energy1__global_views` | 0.615 (0.014) | 0.162 (0.004) | 298 (6) | 385 |
+| standardised | `soft02__swd1_chamfer01__global3` | 0.614 (0.012) | 0.181 (0.005) | 274 (16) | 455 |
+
+Other extremes of the sweep at seed 0: lowest FD of the painting output 234 with 555 distinct paintings (`pca64__swd1_energy1__global`, mean code, r 0.611); highest kNN overlap 0.191 (`soft05__swd1_chamfer01__global3`, standardised code, r 0.596, FD 323).
+
+Observations:
+
+- Combinations raise r of the painting output by about 0.10 over the baseline for the mean code (0.641 to 0.737 to 0.747) and by 0.06 to 0.085 for the standardised code (0.556 to 0.614 to 0.641). The gains are several standard deviations over seeds.
+- The gains come from retrieval inside training (soft or straight-through head) together with a distribution term; a small chamfer weight added to sliced Wasserstein gives the highest r, the energy distance gives the lowest FD at a similar r.
+- `soft02__swd1_chamfer01__global3` improves every reported quantity over the baseline for both codes (mean code: r +0.096, kNN +0.023, FD about equal; standardised: r +0.058, kNN +0.044, FD -64, 61 more distinct paintings).
+- The straight-through head with chamfer has the highest r and the lowest kNN overlap for the mean code (0.079): global structure improves while neighbourhoods degrade.
+- The multi-layer structure term lowers r for the mean code and leaves it unchanged for the standardised code. The local term and the larger structure weight change r by 0.01 or less on average.
+- No combination exceeds r 0.76 with several hundred distinct paintings; the limit set by the sparsity of the collection (entry of 2026-11-14 above) remains.
