@@ -1,0 +1,22 @@
+# G-GAN on the training split of the art collection. GPU 0: base_channels 64; GPU 1: base_channels 96.
+# Each run stops at 60000 steps or after 9 hours.
+name: abstraction-gan-art
+branch: g-gan
+gpu: true
+kernels:
+  - "{user}/abstraction-features"
+inputs:
+  ART_ZIP: abstract_art.zip
+commands:
+  - nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+  - python -m zipfile -e {ART_ZIP} datasets/
+  - >-
+    (set -e; export CUDA_VISIBLE_DEVICES=0;
+    python methods/gan/train_gan.py --seed 0 --channels 64 --tag ch64 --hours 9;
+    ) > runs/gpu0.log 2>&1 & p0=$!;
+    (set -e; export CUDA_VISIBLE_DEVICES=1;
+    python methods/gan/train_gan.py --seed 0 --channels 96 --tag ch96 --hours 9;
+    ) > runs/gpu1.log 2>&1 & p1=$!;
+    wait $p0; r0=$?; wait $p1; r1=$?;
+    tail -n 2 runs/gpu0.log runs/gpu1.log;
+    exit $((r0 + r1))

@@ -1,0 +1,15 @@
+# G-GAN. Unconditional generator of abstract art, trained on the training split of the art collection.
+# No value has been validated by a full run.
+gan:
+  latent_dim: 128
+  base_channels: 64
+  batch_size: 64
+  lr: 2.0e-4
+  betas: [0.0, 0.9]
+  ema: 0.999
+  steps: 60000
+  augment: "color,translation,cutout"   # differentiable augmentation of real and generated images
+  r1_weight: 0.0
+  log_every: 100
+  eval_every: 5000
+  n_eval_samples: 2000
