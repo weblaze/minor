@@ -26,6 +26,8 @@ Scores per configuration (test tracks, window-averaged codes):
   distinct     number of distinct paintings
   pixel_*      r between audio distances and distances of pixel-based feature sets of the paintings
   view_r       mean r of the painting output against the single-layer codes in `views`
+  val_*        painting_r, painting_knn, painting_fd, distinct and direct_r on the validation tracks
+               (Frechet distance against validation art); used for selecting configurations
 
 Usage:
   python methods/f1/realism.py --seed 0 [--only NAME ...] [--code mean]
@@ -287,12 +289,17 @@ def main():
     train, test = to(codes[splits == "train"]), to(codes[splits == "test"].mean(axis=1))
     train_views = [to(v[splits == "train"]) for v in view_codes]
     test_views = [to(v[splits == "test"].mean(axis=1)) for v in view_codes]
+    val, val_art = to(codes[splits == "val"].mean(axis=1)), art[art_splits == "val"]
+    val_views = [to(v[splits == "val"].mean(axis=1)) for v in view_codes]
 
     results = {}
     for name in names:
         spec = {**DEFAULT, **grid[name]}
         forward = fit(spec, config, train, train_views, gallery, device, steps, seed)
         results[name] = score(forward, test, test_views, gallery, test_art, pixel_stats, config["eval"]["knn_k"])
+        on_val = score(forward, val, val_views, gallery, val_art, {}, config["eval"]["knn_k"])
+        results[name].update({f"val_{key}": on_val[key] for key in
+                              ("painting_r", "painting_knn", "painting_fd", "distinct", "direct_r")})
         log.save_json("results.json", results)
     print(json.dumps({"code": code["variant"], "run": str(log.dir)}))
     keys = ["direct_r", "direct_fd", "painting_r", "painting_knn", "painting_fd", "displacement", "distinct", "view_r"]
