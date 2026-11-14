@@ -8,6 +8,8 @@ Versioning scheme: `vX.Y.Z` — `X` = approach being delivered (v1 = approach 01
 
 ### Added (branch `s1-structure`)
 - S1: spatial VAE (GroupNorm, residual blocks), mapping trained with sliced Wasserstein and distance-correlation losses, variants s0, s1_cycle and shuffled, evaluation script, method description in `methods/s1/README.md`
+### Added (branch `q1-structure`)
+- Q1: vector-latent VAE, sampleability gate, audio-code transforms (standardised, whitened), mapping trained with feature-space and latent sliced Wasserstein, distance-correlation and neighbour-distribution losses, variants no_local, no_global, no_feat and shuffled, Stage 0 diagnostics, PCA-alignment and retrieval baselines, seed-agreement script, method description in `methods/q1/README.md`
 
 ### Added (branch `base`)
 - Frozen encoders: MERT-v1-95M (per-layer, time-averaged) and DINOv2 ViT-S/14 (differentiable with respect to the image)

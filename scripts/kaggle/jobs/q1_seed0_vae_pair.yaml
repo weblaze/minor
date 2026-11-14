@@ -1,0 +1,32 @@
+# Q1 variant q1, seed 0, on two VAEs: kl_weight 0.3 (selected by the gate rule) and kl_weight 0.02
+# (gate failed, overridden; reported as a deviation). Each chain: baselines, mapper (20000 steps), evaluation.
+name: abstraction-q1-seed0-vae-pair
+branch: q1-structure
+gpu: true
+kernels:
+  - "{user}/abstraction-features"
+  - "{user}/abstraction-q1-vae"
+  - "{user}/abstraction-q1-kl-sweep"
+inputs:
+  MERT: mert_embeddings
+  ART_ZIP: abstract_art.zip
+  VAE_RULE: q1_vae_kl0.3_seed0_20261110T192251Z
+  VAE_LOW: q1_vae_seed0_20261110T155658Z
+commands:
+  - nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+  - python -m zipfile -e {ART_ZIP} datasets/
+  - ln -s {MERT} datasets/mert_embeddings
+  - >-
+    (set -e; export CUDA_VISIBLE_DEVICES=0;
+    python methods/q1/baselines.py --seed 0 --tag kl0.3 --vae {VAE_RULE}/vae.pt;
+    python methods/q1/train_mapper.py --seed 0 --tag kl0.3 --vae {VAE_RULE}/vae.pt --variant q1;
+    python methods/q1/evaluate.py --seed 0 --tag kl0.3 --vae {VAE_RULE}/vae.pt --mapper runs/q1_mapper_q1_kl0.3_seed0_*/mapper.pt;
+    ) > runs/gpu0.log 2>&1 & p0=$!;
+    (set -e; export CUDA_VISIBLE_DEVICES=1;
+    python methods/q1/baselines.py --seed 0 --tag kl0.02 --vae {VAE_LOW}/vae.pt;
+    python methods/q1/train_mapper.py --seed 0 --tag kl0.02 --vae {VAE_LOW}/vae.pt --variant q1 --ignore-gate;
+    python methods/q1/evaluate.py --seed 0 --tag kl0.02 --vae {VAE_LOW}/vae.pt --mapper runs/q1_mapper_q1_kl0.02_seed0_*/mapper.pt;
+    ) > runs/gpu1.log 2>&1 & p1=$!;
+    wait $p0; r0=$?; wait $p1; r1=$?;
+    tail -n 2 runs/gpu0.log runs/gpu1.log;
+    exit $((r0 + r1))

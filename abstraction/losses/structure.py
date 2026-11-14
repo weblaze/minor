@@ -29,3 +29,24 @@ def pearson(a, b, eps=1e-8):
 def distance_correlation_loss(d_source, d_target):
     """1 - Pearson correlation between the off-diagonal entries of two distance matrices."""
     return 1 - pearson(upper_triangle(d_source), upper_triangle(d_target))
+
+
+def neighbour_kl_loss(d_source, d_target, temperature=0.5):
+    """KL divergence between row-wise soft neighbour distributions of two distance matrices.
+
+    Each matrix is divided by its mean off-diagonal value, which removes the
+    scale of the space. Row i then defines p(j | i) proportional to
+    exp(-d[i, j] / temperature) over j != i. The loss is the mean over rows of
+    KL(p_source || p_target). It weights near neighbours, whereas the
+    correlation loss is dominated by large distances.
+    """
+    n = d_source.shape[0]
+    off = ~torch.eye(n, dtype=torch.bool, device=d_source.device)
+
+    def log_neighbours(d):
+        d = d / d[off].mean().clamp_min(1e-8)
+        return F.log_softmax((-d / temperature).masked_fill(~off, float("-inf")), dim=1)
+
+    log_p, log_q = log_neighbours(d_source), log_neighbours(d_target)
+    kl = (log_p.exp() * (log_p - log_q).masked_fill(~off, 0.0)).sum(dim=1)
+    return kl.mean()
