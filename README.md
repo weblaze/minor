@@ -21,7 +21,7 @@ Progress as of 2026-11-14:
 - With real paintings, the leading contrast of the audio representation is mapped to the leading contrast of the art collection in every seed; the orientation of that correspondence and all finer detail are not determined by distance matching alone.
 - Retrieval of real paintings is limited by the sparsity of a finite collection; structure and closeness to the art distribution trade off along one curve, on which the generated-image results also lie.
 
-All results are from a single seed and no human evaluation has been made. They are preliminary and are not reported here as findings.
+Q1 on the mean code has three seeds and the F1 retrieval results have five to fifty; all other results are from a single seed. No human evaluation has been made. The results are preliminary and are not reported here as findings.
 
 ## How the system works
 
