@@ -940,3 +940,12 @@ Conclusion: the R1 variant is the working G-GAN configuration. It is under-train
 - Mixed precision was not validated before the launch: on the GTX 1650 it gives non-finite losses (half precision on that card), so this job is its first test. The run of 2026-11-15 cannot be resumed (only the averaged generator was saved); both runs start from step 0.
 - Private Kaggle dataset `arunavganguly/abstraction-cav-mae` created for S4: `audio_model.21.pth` (CAV-MAE-Scale++, unmodified, from the checkpoint links of github.com/YuanGongND/cav-mae, BSD 2-Clause), 764386034 bytes, sha256 `15c8a9de088536341156d5f2a3d8f78cd6c82269fb03951d100963fa12bd89a7`. Local copy: `models/cav_mae/audio_model.21.pth` (not in git).
 - Results of the job to follow.
+
+## 2026-11-16 — S4: probe code and Kaggle job launched
+
+- Code: `pipeline` 1c56ab2. `abstraction/encoders/cav_mae.py` (encoder of CAV-MAE-Scale++, parameter names of the published checkpoint; all 164.5 M encoder parameters load from `audio_model.21.pth`, decoder entries ignored), `methods/s4/extract.py`, `methods/s4/probe.py`, job `scripts/kaggle/jobs/s4_probe.yaml`.
+- Inputs to the model: audio as in the MERT extraction (three 10 s windows from the centre of the track), 16 kHz, 128-bin filterbank, 1024 frames, normalised with -5.081 and 4.4849; paintings with the shorter side scaled to 224 and a centre crop. Embedding: token mean after the joint layers; a track is the mean of its windows.
+- The probe trains nothing. It reports: agreement of CAV-MAE audio embeddings with MERT codes and of CAV-MAE image embeddings with DINOv2 features (test split); statistics of the track-painting cosine similarity (variance shares of track, painting and pair; agreement of two windows of one track); S4 as a retrieval bridge (most similar training painting per test track, scored like the F1 painting block, raw and with per-painting standardisation); and, for painting assignments of other methods given with `--assignments`, the mean similarity of the assigned pairs against random re-assignments (D-S4).
+- Checked locally: smoke pipeline (`scripts/smoke.py --methods s4`) passes; the real checkpoint loads and embeds paintings on the CPU. Not checked locally: the filterbank path (`torchaudio` is not installed on the laptop).
+- Launched: `abstraction-s4-probe` version 1 (extraction of all tracks and paintings, then the probe without `--assignments`). D-S4 on the F1 assignments is run locally from the fetched embeddings.
+- Results to follow.
