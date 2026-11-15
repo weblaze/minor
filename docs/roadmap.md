@@ -30,7 +30,7 @@ Set by the project owner on 2026-11-14 (second revision of that day). A bridge c
 
 ## Phase 1: S0, S1, Q1, F1, S2 with G-VAE
 
-Status: experiments conclude when the Q1 seed and control runs of 2026-11-14 are fetched and logged.
+Status 2026-11-16: steps 1 to 3 are done (run log entries of 2026-11-14 and 2026-11-15; `docs/paper1/`). A draft of the first paper exists (`docs/paper1/paper.md`). No S2 run has been made. Step 5 is not started.
 
 Remaining steps:
 
