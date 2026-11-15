@@ -795,3 +795,124 @@ Observations:
 - The straight-through head with chamfer has the highest r and the lowest kNN overlap for the mean code (0.079): global structure improves while neighbourhoods degrade.
 - The multi-layer structure term lowers r for the mean code and leaves it unchanged for the standardised code. The local term and the larger structure weight change r by 0.01 or less on average.
 - No combination exceeds r 0.76 with several hundred distinct paintings; the limit set by the sparsity of the collection (entry of 2026-11-14 above) remains.
+
+## 2026-11-14 — corrections and reference values
+
+Earlier entries are left as written. This entry resolves inconsistencies between them.
+
+- S1 `s0`, Mantel r: 0.083 in "S1 seed 0, all variants, test split" and 0.082 in "comparison of S1 and Q1 under a common audio code". Both are roundings of the same value, 0.0825. Reference: 0.083 (the value written by `evaluate.py`).
+- Commit of the F1 variant runs: "F1 variants and controls, seed 0 (local)" gives `aa6783c` for all runs. The `f1` and `f0` runs were made before that commit, on a working tree with the F1 files uncommitted; their `meta.json` records `4234cad`, which `docs/results.md` reports. The `shuffled` and random M runs were made at `aa6783c`. The code of the four runs is identical.
+- F1 baseline (`free` head, sliced Wasserstein, global structure term), r of the painting output, seed 0. Mean code: 0.644 (`diagnose.py`), 0.645 (`realism.py`, `orientation.py`), 0.637 (exploratory precursor with a different batch composition). Standardised code: 0.572 (`diagnose.py`), 0.573 (`realism.py`), 0.578 (`train_mapper.py` and `evaluate.py`, which draw batches in a different order). Reference values: the five-seed means of the batch of 2026-11-14, 0.641 (0.013) for the mean code and 0.556 (0.011) for the standardised code; single-seed reference 0.645 and 0.573 (`realism.py`).
+- Variance fraction of the first principal axis of the mean code: 0.117 in "exploratory analysis of the seed-0 outputs", where the axes are fitted on individual training windows, and 0.130 in "audio-code axes against FMA metadata", where they are fitted on window-averaged training tracks. Both are correct for their definition. The orientation analyses use window-averaged training tracks.
+- Selection of combinations in "F1 batch at the end of phase 1": the selection rule used scores on the test tracks. The sweep is repeated with selection on the validation tracks (`methods/f1/phase1_validation.py`); its result is logged separately.
+- The scripts of the exploratory entries are now in `analysis/exploratory/`, with a table that maps each script to its entry.
+
+## 2026-11-15 — F1 combination sweep with selection on the validation tracks (local)
+
+- Code: `f1-feature` 219bbd2, `methods/f1/phase1_validation.py`; aggregation `analysis/exploratory/valsel.py`.
+- Runs: `f1_realism_valsweep_{mean,standardised}_{0..3}_seed0_*` (100 combinations per code, seed 0, validation and test scores recorded), `f1_realism_valrerun_{mean,standardised}_seed{1..4}_*`. State: `runs/f1_validation_phase1/`. Wall time 4.6 h on the GTX 1650.
+- Selection rule, validation tracks only: at least 300 distinct paintings, Frechet distance of the painting output to validation art at most 450, ranked by r of the painting output; five best per code plus the baseline, rerun on seeds 1 to 4.
+- Eligible combinations: 59 of 100 (mean code), 57 of 100 (standardised code).
+- Agreement of validation and test r of the painting output over the 100 combinations (seed 0): Pearson 0.975 (mean code), 0.988 (standardised code).
+
+Five seeds, mean (standard deviation). Test columns are free of selection on test data.
+
+Mean code:
+
+| Combination | rank val / test | test r | test kNN | test FD | test distinct | val r | val FD |
+|---|---|---|---|---|---|---|---|
+| `free__swd1__global` (baseline) | 59 / 42 | 0.641 (0.014) | 0.122 (0.007) | 346 (22) | 371 (24) | 0.603 (0.018) | 381 (19) |
+| `st05__swd1_chamfer01__global_local` | 1 / 2 | 0.743 (0.026) | 0.090 (0.005) | 364 (49) | 338 (39) | 0.731 (0.024) | 347 (40) |
+| `st05__swd1_chamfer01__global` | 2 / 1 | 0.747 (0.008) | 0.079 (0.003) | 375 (31) | 330 (19) | 0.731 (0.013) | 361 (29) |
+| `soft02__swd1_chamfer01__global3` | 3 / 3 | 0.737 (0.014) | 0.145 (0.005) | 340 (21) | 359 (16) | 0.716 (0.014) | 359 (8) |
+| `st05__swd1_energy1__global_local` | 4 / 7 | 0.712 (0.013) | 0.126 (0.005) | 353 (18) | 346 (18) | 0.701 (0.017) | 335 (13) |
+| `st05__energy1__global_local` | 5 / 4 | 0.704 (0.020) | 0.128 (0.005) | 371 (12) | 323 (13) | 0.692 (0.019) | 354 (21) |
+
+Standardised code:
+
+| Combination | rank val / test | test r | test kNN | test FD | test distinct | val r | val FD |
+|---|---|---|---|---|---|---|---|
+| `free__swd1__global` (baseline) | 62 / 67 | 0.556 (0.012) | 0.137 (0.007) | 338 (13) | 394 (20) | 0.559 (0.015) | 367 (15) |
+| `st05__swd1_chamfer01__global3` | 1 / 1 | 0.641 (0.007) | 0.132 (0.007) | 393 (9) | 389 (15) | 0.643 (0.004) | 423 (15) |
+| `st05__energy1__global_views` | 5 / 10 | 0.615 (0.016) | 0.162 (0.004) | 298 (7) | 385 (5) | 0.623 (0.016) | 304 (9) |
+| `soft02__swd1__global_views` | 9 / 22 | 0.602 (0.012) | 0.167 (0.008) | 446 (30) | 307 (10) | 0.613 (0.017) | 439 (30) |
+| `st05__swd5__global3` | 10 / 5 | 0.624 (0.005) | 0.152 (0.003) | 423 (14) | 302 (7) | 0.627 (0.003) | 432 (12) |
+| `st05__swd5__global_views` | 12 / 27 | 0.610 (0.005) | 0.159 (0.006) | 345 (7) | 348 (12) | 0.615 (0.008) | 353 (10) |
+
+Ranks are by r of the painting output at seed 0 over all 100 combinations, without the eligibility filter.
+
+Result:
+
+- Selection on validation tracks returns the same leading combinations as the earlier selection on test tracks: `st05__swd1_chamfer01__global` and `soft02__swd1_chamfer01__global3` for the mean code, `st05__swd1_chamfer01__global3` for the standardised code. Their five-seed test values equal those of the batch of 2026-11-14 (0.747, 0.737, 0.641) to the third decimal or within 0.001.
+- The gain over the baseline is 0.10 (mean code) and 0.085 (standardised code) in test r; it is not an effect of selecting on test data.
+- The baseline reproduces: 0.641 (0.014) and 0.556 (0.012).
+- The straight-through head with the chamfer term gives the highest r and the lowest kNN overlap (0.08 to 0.09, mean code); `soft02__swd1_chamfer01__global3` keeps kNN overlap at 0.145 with r 0.737.
+- The selection note in the corrections entry of 2026-11-14 is resolved by this entry.
+
+## 2026-11-15 — structure under two other image encoders (local, evaluation only)
+
+- Script: `analysis/exploratory/second_encoder.py` (stages `gen_s1q1`, `gen_f1`, `eval`). Run by a subagent; numbers checked against its `results.json`.
+- Question: is the audio-to-image structure of the S1, Q1 and F1 outputs specific to DINOv2, the encoder used in the training losses?
+- Encoders: DINOv2 ViT-S/14 (reference, CLS), MAE ViT-B/16 (`facebook/vit-mae-base`, mask ratio 0, mean of patch tokens), DINO v1 ViT-B/16 (`facebook/dino-vitb16`, loaded from the safetensors conversion at `refs/pr/1`; not compared with the original weights). Neither MAE nor DINO v1 is used in any training loss.
+- Measure: Mantel r and kNN overlap (k = 10) between audio-code distances and image-feature distances, 789 test tracks. F1 mappings retrained locally with `realism.fit`, mean code, seed 0, 4000 steps. Frechet distance not computed.
+- Check: the DINOv2 column reproduces the logged values for every set (largest difference 0.005, for the retrained F1 combination).
+
+| Image set | DINOv2 r | DINOv2 kNN | DINO v1 r | DINO v1 kNN | MAE r | MAE kNN |
+|---|---|---|---|---|---|---|
+| S1 `s1` | 0.861 | 0.268 | 0.508 | 0.220 | 0.232 | 0.096 |
+| S1 `s0` (control) | 0.082 | 0.085 | 0.251 | 0.111 | 0.249 | 0.077 |
+| S1 `shuffled` (control) | 0.140 | 0.049 | 0.175 | 0.107 | 0.149 | 0.074 |
+| Q1 mean code, seed 0 | 0.825 | 0.282 | 0.453 | 0.244 | 0.233 | 0.139 |
+| Q1 mean code, seed 1 | 0.815 | 0.284 | 0.479 | 0.255 | 0.219 | 0.125 |
+| Q1 mean code, seed 2 | 0.818 | 0.290 | 0.448 | 0.257 | 0.172 | 0.133 |
+| Q1 `shuffled` (control) | 0.209 | 0.163 | 0.146 | 0.170 | 0.102 | 0.108 |
+| Q1 `no_feat` | 0.869 | 0.392 | 0.621 | 0.307 | 0.408 | 0.130 |
+| Q1 standardised code | 0.797 | 0.351 | 0.625 | 0.316 | 0.313 | 0.163 |
+| F1 baseline, nearest painting | 0.645 | 0.132 | 0.404 | 0.108 | 0.084 | 0.097 |
+| F1 `soft02__swd1_chamfer01__global3` | 0.732 | 0.142 | 0.479 | 0.116 | 0.065 | 0.101 |
+| F1 untrained mapper, standardised code | 0.066 | 0.038 | 0.067 | 0.037 | 0.016 | 0.036 |
+
+Participation ratio of the features of the 595 test paintings: DINOv2 44.8, DINO v1 68.6, MAE 1.6.
+
+Result:
+
+- DINO v1: the structure is present in every trained set, at r 0.40 to 0.63 against 0.07 to 0.25 for the controls. It is lower than under DINOv2 (0.65 to 0.87). kNN overlap is close to the DINOv2 values for S1 and Q1 (0.22 to 0.32 against 0.27 to 0.39).
+- The structure is therefore not only a property of the DINOv2 feature space; a second self-supervised encoder that was not in the loss sees about 55 to 80 % of the r value.
+- Under DINO v1 the order of the sets differs: Q1 standardised code (0.625) and Q1 `no_feat` (0.621) are above S1 `s1` (0.508) and Q1 mean code (0.45 to 0.48).
+- S1 `s0` reads 0.251 under DINO v1 and 0.249 under MAE, against 0.082 under DINOv2. The margin of S1 `s1` over its control under DINO v1 is 0.26.
+- MAE: the mean-patch features are close to one-dimensional on this collection (participation ratio 1.6). Controls score as high as trained sets. The MAE column does not discriminate and gives no evidence in either direction.
+- F1 untrained mapper on the mean code gave 0.036 in this rerun; no logged value exists for that setting (the logged 0.066 is for the standardised code), and the other encoders were not run on it.
+
+Limitations: one seed for S1 and F1; MAE feature pooling was not varied (CLS token or a normalised layer could behave differently).
+
+## 2026-11-15 — G-GAN, first run (Kaggle): failed, discriminator did not train
+
+- Code: `g-gan` e6b3d5a, `methods/gan/train_gan.py`; job `abstraction-gan-art`; runs `gan_ch64_seed0_20261114T112652Z`, `gan_ch96_seed0_20261114T112652Z`. Two T4 GPUs, 9 h each.
+- Setting: plain convolutional generator and discriminator (no residual connections), spectral normalisation on every discriminator layer, hinge loss, differentiable augmentation, batch 64, learning rate 2e-4.
+- Reference Frechet distances (DINOv2 features, 595 test paintings): training art 113.3, Q1 VAE reconstructions 208.5, Q1 VAE prior samples 974.7.
+
+| Width | Steps reached | Step time | FD by evaluation step | Last FD | Last kernel distance |
+|---|---|---|---|---|---|
+| 64 | 30575 | 1.06 s | 1468, 1334, 1226, 1123, 1049, 979 (steps 5000 to 30000) | 1094 | 43.3 |
+| 96 | 13128 | 2.47 s | 1338, 973 (steps 5000, 10000) | 1387 | 51.3 |
+
+- Discriminator loss stayed at 2.00 for the whole run at width 64 and until step 11000 at width 96; mean discriminator output on real and on generated images was equal and between 0.003 and 0.05. Under the hinge loss this means the discriminator did not separate the two sets on average, at an output scale far below the margin of 1.
+- Samples: few distinct patterns (dark blobs, grid textures), near-greyscale; mode collapse.
+- The last evaluation of each run is worse than the one before it (979 to 1094; 973 to 1387).
+- Step time was set by image decoding in the data loader (one process, no workers), not by the GPU.
+
+Conclusion: the run measures the first settings, not the adversarial generator as a method.
+
+## 2026-11-15 — G-GAN, second version: local check, second Kaggle run launched
+
+- Code: `g-gan` 0c558e9. Changes: residual blocks in generator and discriminator (sum pooling in the discriminator); spectral normalisation or an R1 penalty (every 16 steps) as alternatives; training images held on the device, flip on the device.
+- Local check (GTX 1650, width 32, batch 32, 3000 steps, 2000 samples; runs `gan_localA_sn_*`, `gan_localB_r1_*`; step time 0.5 s with a second process on the machine):
+
+| Regulariser | FD at 1500 | FD at 3000 | Kernel distance at 3000 |
+|---|---|---|---|
+| spectral normalisation | 1972 | 1506 | 77.8 |
+| R1 penalty 10, no spectral normalisation | 1863 | 1583 | 96.1 |
+
+- Samples of both at step 3000 are varied in colour and layout, with checkerboard artefacts; no collapse to a few patterns. FD falls by about 300 to 450 per 1500 steps at this stage. The first version needed 5000 steps at width 64 to reach 1468.
+- With spectral normalisation the mean discriminator outputs on real and generated images are again equal (loss 2.00) while FD falls; equal means are therefore not by themselves a sign of failure. In the first version the output scale was below 0.05; here it is 0.07 to 0.28.
+- Launched: `abstraction-gan-art` version 2, width 64, batch 64, GPU 0 spectral normalisation (`--tag sn`), GPU 1 R1 penalty 10 (`--tag r1`), 150000 steps or 8 h. Results to follow.
