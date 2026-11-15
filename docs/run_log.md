@@ -933,3 +933,10 @@ Conclusion: the run measures the first settings, not the adversarial generator a
 - The R1 generator at step 13651 is below the prior samples of every Q1 VAE setting (682.0 against 685.2 to 1261.4) and above the Q1 VAE reconstructions (208.5) and the Q1 mapper outputs (402 to 425).
 
 Conclusion: the R1 variant is the working G-GAN configuration. It is under-trained at 13651 steps; the step time has to be reduced or the run continued before the generator is used in a bridge. One seed.
+
+## 2026-11-16 — G-GAN R1 job launched; CAV-MAE checkpoint on Kaggle
+
+- Launched: `abstraction-gan-r1` version 1, code `pipeline` d9801ba, job file `scripts/kaggle/jobs/gan_r1.yaml`. Width 64, batch 64, seed 0, R1 penalty 10, no spectral normalisation, 150000 steps or 6 h per GPU. GPU 0: mixed precision (`--amp --tag r1amp`). GPU 1: float32 (`--tag r1`). Both write `checkpoint.pt` at every evaluation for `--resume`. The job reports the return code of GPU 1 only; the mixed-precision run exits at the first non-finite loss.
+- Mixed precision was not validated before the launch: on the GTX 1650 it gives non-finite losses (half precision on that card), so this job is its first test. The run of 2026-11-15 cannot be resumed (only the averaged generator was saved); both runs start from step 0.
+- Private Kaggle dataset `arunavganguly/abstraction-cav-mae` created for S4: `audio_model.21.pth` (CAV-MAE-Scale++, unmodified, from the checkpoint links of github.com/YuanGongND/cav-mae, BSD 2-Clause), 764386034 bytes, sha256 `15c8a9de088536341156d5f2a3d8f78cd6c82269fb03951d100963fa12bd89a7`. Local copy: `models/cav_mae/audio_model.21.pth` (not in git).
+- Results of the job to follow.
