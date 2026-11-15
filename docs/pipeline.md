@@ -27,6 +27,8 @@ A method folder keeps what is specific to the method: its losses and variants, i
 
 S1 keeps its own code transform (`methods/s1/data.py`). Its `standardised` and `whitened` statistics are computed with `numpy.mean`/`numpy.std` in float64, the shared transform with chunked sums of x and x²; the results differ in the last bits, so replacing it would change S1 runs with those codes. Q1 uses the shared transform, which gives bit-identical codes for Q1.
 
+Code replaced by the shared pipeline is not deleted. It is moved unchanged to `methods/<method>/legacy/` with a README naming its replacement; nothing imports it. At present: `methods/q1/legacy/data.py`.
+
 ## Front door
 
 ```bash
