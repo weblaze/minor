@@ -46,9 +46,12 @@ def fit_code_transform(train_layers, variant, whiten_dim=128, layers=None):
 
 
 def apply_code_transform(layers, transform):
+    """A transform without "layers" (Q1 checkpoints written before the shared transform) uses all layers."""
+    index = transform.get("layers")
     out = []
     for start in range(0, len(layers), CHUNK):
-        chunk = layers[start:start + CHUNK][:, :, transform["layers"]].astype(np.float32)
+        chunk = layers[start:start + CHUNK]
+        chunk = (chunk if index is None else chunk[:, :, index]).astype(np.float32)
         if transform["variant"] != "mean":
             chunk = (chunk - transform["layer_mean"]) / transform["layer_std"]
         codes = chunk.mean(axis=2)

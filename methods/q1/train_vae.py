@@ -17,10 +17,12 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torchvision.utils import save_image
 
+from abstraction.pipeline.cli import setup
+from abstraction.pipeline.data import art_dataset
+from abstraction.pipeline.features import build_dino
 from abstraction.utils.runlog import RunLog, set_seed
 
-from common import base_parser, build_dino, build_vae, run_name, setup
-from data import art_dataset
+from common import base_parser, build_vae, run_name
 
 
 def main():

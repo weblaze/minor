@@ -21,40 +21,23 @@ Usage:
   python methods/q1/evaluate.py --vae runs/<vae run>/vae.pt --mapper runs/<run>/mapper.pt
   python methods/q1/evaluate.py --vae runs/<vae run>/vae.pt --seed 0
 """
-import csv
-
 import numpy as np
 import torch
-from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import cross_val_score
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
 from torchvision.utils import save_image
 
+from abstraction.data.codes import apply_code_transform, fit_code_transform, transform_from_state
+from abstraction.generators import load_generator
+from abstraction.pipeline.cli import setup
+from abstraction.pipeline.data import art_dataset, load_layers
+from abstraction.pipeline.features import build_dino, features_of_dataset
+from abstraction.pipeline.scores import distribution_scores, full_scores, genre_leakage
 from abstraction.utils.runlog import RunLog, set_seed
 
-from common import (base_parser, build_dino, build_mapper, code_statistics, distribution_scores,
-                    features_of_dataset, generate, load_vae, run_name, score_outputs, setup)
-from data import apply_code_transform, art_dataset, fit_code_transform, load_layers, transform_from_state
-
-
-def genre_leakage(track_ids, image_features, codes, genres_csv):
-    with open(genres_csv, newline="", encoding="utf-8") as f:
-        genre_of = {row["track_id"].lstrip("0"): row["genre"] for row in csv.DictReader(f)}
-    keep = [i for i, t in enumerate(track_ids) if t.lstrip("0") in genre_of]
-    labels = np.array([genre_of[track_ids[i].lstrip("0")] for i in keep])
-    _, counts = np.unique(labels, return_counts=True)
-
-    def probe(x):
-        model = make_pipeline(StandardScaler(), LogisticRegression(max_iter=2000))
-        return float(cross_val_score(model, x[keep], labels, cv=5).mean())
-
-    return {"n_tracks": len(keep), "n_genres": len(counts), "majority_rate": float(counts.max() / counts.sum()),
-            "accuracy_from_images": probe(image_features), "accuracy_from_audio": probe(codes)}
+from common import base_parser, build_mapper, code_statistics, generate, run_name
 
 
 def main():
-    parser = base_parser(__doc__)
+    parser = base_parser(__doc__, generator=True)
     parser.add_argument("--vae", required=True)
     parser.add_argument("--mapper", default=None)
     parser.add_argument("--genres", default=None)
@@ -65,7 +48,7 @@ def main():
     set_seed(seed)
     n_perm = args.permutations or (199 if args.smoke else config["eval"]["n_permutations"])
 
-    vae = load_vae(args.vae, config, device)
+    generator = load_generator(args.generator, args.vae, config, device)
     dino = build_dino(config, device, args.smoke)
     ids, layers, splits = load_layers(config, args.smoke)
     if args.mapper:
@@ -83,18 +66,19 @@ def main():
     track_ids = [t for t, s in zip(ids, splits) if s == "test"]
     del layers
 
-    mapper = build_mapper(config, codes.shape[-1]).to(device).eval()
+    mapper = build_mapper(config, codes.shape[-1], generator).to(device).eval()
     if args.mapper:
         mapper.load_state_dict(state["model"])
     config["run"] = {"variant": variant, "vae": str(args.vae), "mapper": args.mapper,
-                     "mapper_seed": trained_seed, "code_variant": transform["variant"]}
+                     "mapper_seed": trained_seed, "code_variant": transform["variant"],
+                     "generator": args.generator}
     log = RunLog(config["paths"]["runs_dir"], run_name(f"eval_{variant}", args.smoke), config, seed)
 
     features, first_images = [], None
     with torch.no_grad():
         for start in range(0, len(codes), 64):
             batch = torch.from_numpy(codes[start:start + 64]).to(device)
-            images, _ = generate(mapper, vae, batch, code_mean, code_std)
+            images, _ = generate(mapper, generator, batch, code_mean, code_std)
             features.append(dino(images).float().cpu())
             if first_images is None:
                 first_images = images.cpu()
@@ -105,10 +89,10 @@ def main():
     train_set = art_dataset(config, "train", False, args.smoke)
     train_art = features_of_dataset(dino, train_set, device).numpy()
     recon_art = features_of_dataset(dino, train_set, device,
-                                    transform=lambda x: vae.decode(vae.encode(x)[0])).numpy()
+                                    transform=lambda x: generator.decode(generator.encode(x)[0])).numpy()
 
     results = {"variant": variant, "mapper_seed": trained_seed, "code_variant": transform["variant"],
-               **score_outputs(codes, features, test_art, config, n_perm, seed)}
+               **full_scores(codes, features, test_art, config["eval"]["knn_k"], n_perm, seed)}
     results["image_distribution"]["reference_train_art"] = distribution_scores(train_art, test_art, seed)
     results["image_distribution"]["reference_vae_reconstructions"] = distribution_scores(recon_art, test_art, seed)
     if args.genres:

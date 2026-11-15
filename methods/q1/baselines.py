@@ -26,15 +26,19 @@ import torch
 from scipy.spatial.distance import cdist
 from torchvision.utils import save_image
 
+from abstraction.data.codes import apply_code_transform, fit_code_transform
+from abstraction.generators import load_generator
+from abstraction.pipeline.cli import setup
+from abstraction.pipeline.data import art_dataset, load_layers
+from abstraction.pipeline.features import build_dino, features_of_dataset
+from abstraction.pipeline.scores import full_scores
 from abstraction.utils.runlog import RunLog, set_seed
 
-from common import (base_parser, build_dino, encode_images, features_of_dataset, features_of_latents, load_vae,
-                    principal_axes, run_name, score_outputs, setup)
-from data import apply_code_transform, art_dataset, fit_code_transform, load_layers
+from common import base_parser, encode_images, features_of_latents, principal_axes, run_name
 
 
 def main():
-    parser = base_parser(__doc__)
+    parser = base_parser(__doc__, generator=True)
     parser.add_argument("--vae", required=True)
     parser.add_argument("--permutations", type=int, default=None)
     args = parser.parse_args()
@@ -42,10 +46,10 @@ def main():
     seed = config["system"]["seed"]
     set_seed(seed)
     n_perm = args.permutations or (199 if args.smoke else config["eval"]["n_permutations"])
-    config["run"] = {"vae": str(args.vae)}
+    config["run"] = {"vae": str(args.vae), "generator": args.generator}
     log = RunLog(config["paths"]["runs_dir"], run_name("baselines", args.smoke), config, seed)
 
-    vae = load_vae(args.vae, config, device)
+    generator = load_generator(args.generator, args.vae, config, device)
     dino = build_dino(config, device, args.smoke)
     _, layers, splits = load_layers(config, args.smoke)
     transform = fit_code_transform(layers[splits == "train"], config["audio_code"]["variant"],
@@ -55,7 +59,7 @@ def main():
     del layers
 
     train_set = art_dataset(config, "train", False, args.smoke)
-    mu, _ = encode_images(vae, train_set, device)
+    mu, _ = encode_images(generator, train_set, device)
     mu = mu.numpy()
     train_art = features_of_dataset(dino, train_set, device).numpy()
     test_art = features_of_dataset(dino, art_dataset(config, "test", False, args.smoke), device).numpy()
@@ -67,15 +71,16 @@ def main():
     latents = latent_mean + (coordinates * latent_std) @ latent_axes.T
     art_coordinates = (mu - latent_mean) @ latent_axes / latent_std
     nearest = cdist(coordinates, art_coordinates).argmin(axis=1)
+    knn_k = config["eval"]["knn_k"]
 
-    features, images = features_of_latents(dino, vae, torch.from_numpy(latents).float(), device)
+    features, images = features_of_latents(dino, generator, torch.from_numpy(latents).float(), device)
     save_image(images * 0.5 + 0.5, log.dir / "pca_alignment.png", nrow=8)
     save_image(torch.stack([train_set[int(i)] for i in nearest[:64]]) * 0.5 + 0.5, log.dir / "retrieval.png", nrow=8)
 
     results = {
         "n_axes": int(k), "code_variant": transform["variant"],
-        "pca_alignment": score_outputs(test_codes, features.numpy(), test_art, config, n_perm, seed),
-        "retrieval": {**score_outputs(test_codes, train_art[nearest], test_art, config, n_perm, seed),
+        "pca_alignment": full_scores(test_codes, features.numpy(), test_art, knn_k, n_perm, seed),
+        "retrieval": {**full_scores(test_codes, train_art[nearest], test_art, knn_k, n_perm, seed),
                       "n_distinct_artworks": int(len(np.unique(nearest)))},
     }
     log.save_json("results.json", results)

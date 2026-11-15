@@ -34,14 +34,16 @@ import math
 
 import torch
 
+from abstraction.data.codes import apply_code_transform, fit_code_transform, transform_to_state
+from abstraction.generators import load_generator
 from abstraction.losses.distribution import sliced_wasserstein
 from abstraction.losses.structure import distance_correlation_loss, neighbour_kl_loss, pairwise_distances
+from abstraction.pipeline.cli import setup
+from abstraction.pipeline.data import art_dataset, load_layers, sample_windows
+from abstraction.pipeline.features import build_dino, features_of_dataset
 from abstraction.utils.runlog import RunLog, set_seed
 
-from common import (base_parser, build_dino, build_mapper, code_statistics, encode_images, features_of_dataset,
-                    gate_passed, generate, load_vae, run_name, setup)
-from data import (apply_code_transform, art_dataset, fit_code_transform, load_layers, sample_windows,
-                  transform_to_state)
+from common import base_parser, build_mapper, code_statistics, encode_images, gate_passed, generate, run_name
 
 TERMS = ("feat", "lat", "global", "local")
 VARIANTS = {
@@ -54,7 +56,7 @@ VARIANTS = {
 
 
 def main():
-    parser = base_parser(__doc__)
+    parser = base_parser(__doc__, generator=True)
     parser.add_argument("--vae", required=True)
     parser.add_argument("--variant", choices=sorted(VARIANTS), default="q1")
     parser.add_argument("--steps", type=int, default=None)
@@ -74,10 +76,10 @@ def main():
         raise SystemExit(f"gate.json next to {args.vae} is {state}; run gate.py or pass --ignore-gate")
     set_seed(seed)
     config["run"] = {"variant": args.variant, "vae": str(args.vae), "steps": steps, "weights": weights,
-                     "gate_passed": gate, "ignore_gate": args.ignore_gate}
+                     "gate_passed": gate, "ignore_gate": args.ignore_gate, "generator": args.generator}
     log = RunLog(config["paths"]["runs_dir"], run_name(f"mapper_{args.variant}", args.smoke), config, seed)
 
-    vae = load_vae(args.vae, config, device)
+    image_generator = load_generator(args.generator, args.vae, config, device)
     dino = build_dino(config, device, args.smoke)
 
     _, layers, splits = load_layers(config, args.smoke)
@@ -91,10 +93,10 @@ def main():
     art = {}
     for split in ("train", "val"):
         dataset = art_dataset(config, split, False, args.smoke)
-        mu, logvar = encode_images(vae, dataset, device)
+        mu, logvar = encode_images(image_generator, dataset, device)
         art[split] = (mu.to(device), logvar.to(device), features_of_dataset(dino, dataset, device).to(device))
 
-    mapper = build_mapper(config, train_codes.shape[-1]).to(device)
+    mapper = build_mapper(config, train_codes.shape[-1], image_generator).to(device)
     optimiser = torch.optim.AdamW(mapper.parameters(), lr=hp["lr"])
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimiser, lambda s: 0.5 * (1 + math.cos(math.pi * s / steps)))
     batch_size = min(hp["batch_size"], train_codes.shape[0], 32 if args.smoke else hp["batch_size"])
@@ -108,7 +110,7 @@ def main():
         index = torch.randint(mu.shape[0], (hp["real_batch_size"],), generator=generator).to(device)
         noise = torch.randn(len(index), mu.shape[1], generator=generator).to(device)
         real_latents = mu[index] + (0.5 * logvar[index]).exp() * noise
-        images, z = generate(mapper, vae, codes, code_mean, code_std)
+        images, z = generate(mapper, image_generator, codes, code_mean, code_std)
         features = dino(images)
         source = codes if permute is None else codes[permute]
         d_audio, d_image = pairwise_distances(source), pairwise_distances(features)

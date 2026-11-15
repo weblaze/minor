@@ -30,15 +30,18 @@ import torch
 from sklearn.mixture import GaussianMixture
 from torchvision.utils import save_image
 
+from abstraction.generators import load_generator
+from abstraction.pipeline.cli import setup
+from abstraction.pipeline.data import art_dataset
+from abstraction.pipeline.features import build_dino, features_of_dataset
+from abstraction.pipeline.scores import distribution_scores
 from abstraction.utils.runlog import RunLog, set_seed
 
-from common import (base_parser, build_dino, distribution_scores, encode_images, features_of_dataset,
-                    features_of_latents, load_vae, run_name, setup)
-from data import art_dataset
+from common import base_parser, encode_images, features_of_latents, run_name
 
 
 def main():
-    parser = base_parser(__doc__)
+    parser = base_parser(__doc__, generator=True)
     parser.add_argument("--vae", required=True)
     args = parser.parse_args()
     config, device = setup(args)
@@ -46,13 +49,13 @@ def main():
     set_seed(seed)
     hp = config["gate"]
     n = 128 if args.smoke else hp["n_samples"]
-    config["run"] = {"vae": str(args.vae)}
+    config["run"] = {"vae": str(args.vae), "generator": args.generator}
     log = RunLog(config["paths"]["runs_dir"], run_name("gate", args.smoke), config, seed)
 
-    vae = load_vae(args.vae, config, device)
+    generator = load_generator(args.generator, args.vae, config, device)
     dino = build_dino(config, device, args.smoke)
     train_set = art_dataset(config, "train", False, args.smoke)
-    mu, _ = encode_images(vae, train_set, device)
+    mu, _ = encode_images(generator, train_set, device)
     test_art = features_of_dataset(dino, art_dataset(config, "test", False, args.smoke), device).numpy()
     train_art = features_of_dataset(dino, train_set, device).numpy()
 
@@ -70,7 +73,7 @@ def main():
 
     result = {"reference_train_art": distribution_scores(train_art, test_art, seed)}
     for name, z in latents.items():
-        features, images = features_of_latents(dino, vae, z, device)
+        features, images = features_of_latents(dino, generator, z, device)
         result[name] = distribution_scores(features.numpy(), test_art, seed)
         save_image(images[:32] * 0.5 + 0.5, log.dir / f"{name}.png", nrow=8)
 

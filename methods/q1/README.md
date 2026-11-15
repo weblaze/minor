@@ -101,6 +101,8 @@ A positive H1 shows that the constraint was optimised and generalises to unseen 
 
 Splits: tracks and images are assigned to train (80 %), validation (10 %) and test (10 %) by the MD5 hash of the track identifier or file name. All transforms and statistics are fitted on the training split. Loss weights are selected on validation losses only. The checkpoint of the final step is evaluated; there is no checkpoint selection. D1 to D3 and the gate read the test split of each collection for measurement; no parameter of `M` depends on them, but the choice of code variant and of `kl_weight` does, and this is reported with the results.
 
+Stages that load the VAE take `--generator` (default `vector_vae`), which selects the implementation of `abstraction.generators` loaded from `--vae`; see `docs/pipeline.md`. Every stage can also be started as `python scripts/run.py q1 <stage> [args...]`.
+
 Every script accepts `--smoke`: synthetic codes and images, randomly initialised DINOv2, few steps. Smoke runs verify the code path and produce no interpretable numbers.
 
 ## 8. Outputs

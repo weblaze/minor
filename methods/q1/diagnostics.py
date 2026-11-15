@@ -24,12 +24,15 @@ import numpy as np
 import torch.nn.functional as F
 from scipy.stats import wasserstein_distance
 
+from abstraction.data.codes import CODE_VARIANTS, apply_code_transform, fit_code_transform
 from abstraction.metrics.geometry import participation_ratio
 from abstraction.metrics.structure import distance_matrix, retrieval_accuracy
+from abstraction.pipeline.cli import setup
+from abstraction.pipeline.data import art_dataset, load_layers
+from abstraction.pipeline.features import build_dino, features_of_dataset
 from abstraction.utils.runlog import RunLog, set_seed
 
-from common import base_parser, build_dino, features_of_dataset, run_name, setup
-from data import CODE_VARIANTS, apply_code_transform, art_dataset, fit_code_transform, load_layers
+from common import base_parser, run_name
 
 QUANTILES = (0.05, 0.25, 0.5, 0.75, 0.95)
 
