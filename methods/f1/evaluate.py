@@ -21,10 +21,13 @@ from torchvision.utils import save_image
 from abstraction.data.codes import apply_code_transform, transform_from_state
 from abstraction.metrics.structure import distance_matrix
 from abstraction.models.mapper import Mapper
+from abstraction.pipeline.cli import setup
+from abstraction.pipeline.data import codes_of, load_layers
+from abstraction.pipeline.scores import correlation, full_scores
 from abstraction.utils.runlog import RunLog, set_seed
 
-from common import (FEATURE_DIM, base_parser, codes_of, correlation, full_scores, image_statistics, load_art,
-                    load_images, load_layers, map_codes, nearest_paintings, run_name, setup)
+from common import (FEATURE_DIM, base_parser, image_statistics, load_art, load_images, map_codes,
+                    nearest_paintings, run_name)
 
 
 def main():

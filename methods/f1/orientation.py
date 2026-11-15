@@ -33,9 +33,12 @@ from scipy.stats import skew
 from abstraction.losses.distribution import sliced_wasserstein
 from abstraction.losses.structure import distance_correlation_loss, pairwise_distances
 from abstraction.metrics.structure import distance_matrix
+from abstraction.pipeline.cli import setup
+from abstraction.pipeline.data import codes_of, load_layers
+from abstraction.pipeline.scores import correlation
 from abstraction.utils.runlog import RunLog, set_seed
 
-from common import base_parser, codes_of, correlation, load_art, load_layers, run_name, setup
+from common import base_parser, load_art, run_name
 from realism import DEFAULT, GRID, VIEWS, energy_distance_np, fit, sweep_grid
 
 EXTRA = {"swd_w5": {"dist": [["swd", 5.0]]}, "swd_w20": {"dist": [["swd", 20.0]]}}

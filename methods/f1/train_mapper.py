@@ -11,9 +11,11 @@ Usage:
 import torch
 
 from abstraction.data.codes import transform_to_state
+from abstraction.pipeline.cli import setup
+from abstraction.pipeline.data import codes_of, load_layers
 from abstraction.utils.runlog import RunLog, set_seed
 
-from common import VARIANTS, base_parser, codes_of, load_art, load_layers, run_name, setup, train_mapper
+from common import VARIANTS, base_parser, load_art, run_name, train_mapper
 
 
 def main():

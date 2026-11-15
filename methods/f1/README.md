@@ -82,6 +82,8 @@ One mapping run takes about one minute on a 4 GB GPU.
 | `evaluate.py` | `results.json`, `features.npz`, `samples.png` (retrieved paintings of the first 64 test tracks) |
 | `diagnose.py` | `diagnosis.json` |
 
+Every stage can also be started as `python scripts/run.py f1 <stage> [args...]`; see `docs/pipeline.md`.
+
 `--smoke` replaces codes and art features with synthetic data. It verifies that the code runs; its numbers have no meaning.
 
 ## 8. Limitations

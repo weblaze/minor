@@ -24,10 +24,12 @@ import numpy as np
 
 from abstraction.metrics.geometry import participation_ratio
 from abstraction.metrics.structure import distance_matrix
+from abstraction.pipeline.cli import setup
+from abstraction.pipeline.data import codes_of, load_layers
+from abstraction.pipeline.scores import quick_scores
 from abstraction.utils.runlog import RunLog, set_seed
 
-from common import (base_parser, codes_of, load_art, load_layers, map_codes, nearest_paintings, quick_scores,
-                    run_name, setup, train_mapper)
+from common import base_parser, load_art, map_codes, nearest_paintings, run_name, train_mapper
 
 
 def main():

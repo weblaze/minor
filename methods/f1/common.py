@@ -1,25 +1,17 @@
-import argparse
 import os
 from pathlib import Path
 
 import numpy as np
 import torch
 from PIL import Image, ImageOps
-from sklearn.manifold import trustworthiness
-from torch.utils.data import DataLoader
 
-from abstraction.data.codes import apply_code_transform, fit_code_transform
 from abstraction.data.datasets import ImageDataset
-from abstraction.data.embeddings import load_shards
 from abstraction.data.splits import split_of
-from abstraction.encoders.dino import DinoFeatures
 from abstraction.losses.distribution import sliced_wasserstein
 from abstraction.losses.structure import distance_correlation_loss, pairwise_distances
-from abstraction.metrics.distribution import frechet_distance, kernel_distance
-from abstraction.metrics.geometry import participation_ratio
-from abstraction.metrics.structure import distance_matrix, knn_overlap, mantel
 from abstraction.models.mapper import Mapper
-from abstraction.utils.config import load_config
+from abstraction.pipeline import cli
+from abstraction.pipeline.features import build_dino, features_of_dataset
 
 CONFIG_PATH = Path(__file__).with_name("config.yaml")
 FEATURE_DIM = 384
@@ -27,50 +19,15 @@ VARIANTS = {"f1": (True, False), "f0": (False, False), "shuffled": (True, True)}
 
 
 def base_parser(description):
-    parser = argparse.ArgumentParser(description=description,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--config", default=str(CONFIG_PATH))
-    parser.add_argument("--seed", type=int, default=None)
-    parser.add_argument("--tag", default=None, help="appended to the run directory name")
-    parser.add_argument("--code", choices=("mean", "standardised", "whitened"), default=None,
-                        help="audio code variant; overrides audio_code.variant")
+    parser = cli.base_parser(description, CONFIG_PATH,
+                             smoke_help="synthetic codes and features, few steps; checks the code path only")
     parser.add_argument("--layers", type=int, nargs="+", default=None,
                         help="MERT layer indices used for the code; overrides audio_code.layers")
-    parser.add_argument("--smoke", action="store_true",
-                        help="synthetic codes and features, few steps; checks the code path only")
     return parser
 
 
-def setup(args):
-    config = load_config(args.config)
-    if args.seed is not None:
-        config["system"]["seed"] = args.seed
-    if args.tag:
-        config["system"]["tag"] = args.tag
-    if args.code:
-        config["audio_code"]["variant"] = args.code
-    if args.layers:
-        config["audio_code"]["layers"] = args.layers
-    device = torch.device(config["system"]["device"] if torch.cuda.is_available() else "cpu")
-    return config, device
-
-
 def run_name(stem, smoke):
-    return f"f1_{stem}" + ("_smoke" if smoke else "")
-
-
-def load_layers(config, smoke=False):
-    """All tracks: (ids, array (n_tracks, n_windows, 13, 768), split name per track)."""
-    ids, layers = _synthetic_layers() if smoke else load_shards(config["paths"]["mert_embeddings"])
-    val, test = config["split"]["val_percent"], config["split"]["test_percent"]
-    splits = np.array([split_of(track_id, val, test) for track_id in ids])
-    return np.asarray(ids), layers, splits
-
-
-def codes_of(layers, splits, variant, whiten_dim, layer_index=None):
-    """Codes of every track (n_tracks, n_windows, d) and the transform fitted on training tracks."""
-    transform = fit_code_transform(layers[splits == "train"], variant, whiten_dim, layer_index)
-    return apply_code_transform(layers, transform), transform
+    return cli.run_name("f1", stem, smoke)
 
 
 def load_art(config, device, smoke=False):
@@ -88,13 +45,9 @@ def load_art(config, device, smoke=False):
         cache = Path(config["paths"]["dino_art_features"]) / f"cls_{config['dino']['size']}.npz"
         if not cache.exists():
             dataset = ImageDataset(config["paths"]["abstract_art"], size=config["image_size"], train=False)
-            dino = DinoFeatures(config["dino"]["size"], config["dino"]["pooling"]).to(device)
-            out = []
-            with torch.no_grad():
-                for images in DataLoader(dataset, batch_size=64):
-                    out.append(dino(images.to(device)).float().cpu())
+            features = features_of_dataset(build_dino(config, device, False), dataset, device)
             cache.parent.mkdir(parents=True, exist_ok=True)
-            np.savez(cache, names=np.asarray(dataset.image_files), features=torch.cat(out).numpy())
+            np.savez(cache, names=np.asarray(dataset.image_files), features=features.numpy())
         with np.load(cache) as data:
             names, features = data["names"], data["features"]
     splits = np.array([split_of(name, val, test) for name in names])
@@ -183,49 +136,6 @@ def nearest_paintings(outputs, gallery):
     return (a @ b.T).argmax(axis=1)
 
 
-def correlation(d_a, d_b):
-    iu = np.triu_indices(len(d_a), k=1)
-    return float(np.corrcoef(d_a[iu], d_b[iu])[0, 1])
-
-
-def quick_scores(codes, features, test_art, k):
-    """Structure and distribution scores without permutation tests."""
-    d_audio, d_image = distance_matrix(codes), distance_matrix(features)
-    return {"r": correlation(d_audio, d_image), "knn_overlap": knn_overlap(d_audio, d_image, k)[0],
-            "frechet_distance": frechet_distance(features, test_art),
-            "participation_ratio": participation_ratio(features)}
-
-
-def full_scores(codes, features, test_art, k, n_permutations, seed):
-    d_audio, d_image = distance_matrix(codes), distance_matrix(features)
-    r_pearson, p_pearson = mantel(d_audio, d_image, "pearson", n_permutations, seed)
-    r_spearman, p_spearman = mantel(d_audio, d_image, "spearman", n_permutations, seed)
-    overlap, chance = knn_overlap(d_audio, d_image, k)
-    unit = features / np.linalg.norm(features, axis=1, keepdims=True)
-    kid_mean, kid_std = kernel_distance(features, test_art, seed=seed)
-    iu = np.triu_indices(len(features), k=1)
-    it = np.triu_indices(len(test_art), k=1)
-    return {
-        "structure": {
-            "n_tracks": len(codes), "n_permutations": n_permutations,
-            "mantel_pearson": r_pearson, "mantel_pearson_p": p_pearson,
-            "mantel_spearman": r_spearman, "mantel_spearman_p": p_spearman,
-            "knn_k": k, "knn_overlap": overlap, "knn_overlap_chance": chance,
-            "trustworthiness": float(trustworthiness(d_audio, unit, n_neighbors=k, metric="precomputed")),
-        },
-        "image_distribution": {
-            "n": len(features), "n_reference": len(test_art),
-            "frechet_distance": frechet_distance(features, test_art),
-            "kernel_distance": kid_mean, "kernel_distance_std": kid_std,
-            "mean_pairwise_distance": float(d_image[iu].mean()),
-            "mean_pairwise_distance_test_art": float(distance_matrix(test_art)[it].mean()),
-            "participation_ratio": participation_ratio(features),
-            "participation_ratio_test_art": participation_ratio(test_art),
-            "participation_ratio_audio": participation_ratio(codes),
-        },
-    }
-
-
 def load_images(config, names):
     """Paintings as a tensor (n, 3, size, size) in [-1, 1]."""
     size = config["image_size"]
@@ -253,14 +163,3 @@ def image_statistics(images):
     bins = torch.stack([power[:, radius == k].mean(1) for k in range(1, side // 2)], 1)
     out["power_spectrum"] = torch.log(bins + 1e-8).numpy()
     return out
-
-
-def _synthetic_layers(n_tracks=600, n_windows=3, dim=768, n_clusters=8, seed=0):
-    rng = np.random.default_rng(seed)
-    centres = rng.normal(size=(n_clusters, dim))
-    tracks = centres[rng.integers(n_clusters, size=n_tracks)] + 0.5 * rng.normal(size=(n_tracks, dim))
-    codes = tracks[:, None, :] + 0.1 * rng.normal(size=(n_tracks, n_windows, dim))
-    scale = rng.uniform(0.2, 5.0, size=(13, 1))
-    offset = rng.normal(size=(13, dim))
-    layers = codes[:, :, None, :] * scale + offset
-    return [f"synthetic_{i:05d}" for i in range(n_tracks)], layers.astype(np.float16)
