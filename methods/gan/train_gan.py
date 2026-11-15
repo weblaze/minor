@@ -1,7 +1,8 @@
 """G-GAN: unconditional generator of abstract art (128 px, vector latent).
 
-Generator: latent vector -> 4 x 4 feature map -> five upsampling blocks -> image in [-1, 1].
-Discriminator: mirrored, spectral normalisation. Hinge loss. Differentiable augmentation
+Generator: latent vector -> 4 x 4 feature map -> five residual upsampling blocks -> image in [-1, 1].
+Discriminator: residual downsampling blocks, sum pooling; spectral normalisation or an R1 penalty
+(every `r1_every` steps). Hinge loss. The training images are held in memory. Differentiable augmentation
 (colour, translation, cutout) is applied to real and generated images before the discriminator.
 An exponential moving average of the generator weights is kept and is the model that is saved
 and evaluated.
@@ -11,10 +12,11 @@ samples of the averaged generator against the test split of the art collection, 
 grid. The run stops at `gan.steps` or when `--hours` of wall-clock time have passed.
 
 Usage:
-  python methods/gan/train_gan.py --seed 0 [--channels 64] [--hours 9]
+  python methods/gan/train_gan.py --seed 0 [--channels 64] [--hours 9] [--no-spectral-norm --r1 10]
 """
 import argparse
 import copy
+import sys
 import time
 from pathlib import Path
 
@@ -33,39 +35,61 @@ from abstraction.utils.runlog import RunLog, set_seed
 CONFIG_PATH = Path(__file__).with_name("config.yaml")
 
 
+class UpBlock(nn.Module):
+    def __init__(self, a, b):
+        super().__init__()
+        self.norm1, self.conv1 = nn.BatchNorm2d(a), nn.Conv2d(a, b, 3, padding=1)
+        self.norm2, self.conv2 = nn.BatchNorm2d(b), nn.Conv2d(b, b, 3, padding=1)
+        self.skip = nn.Conv2d(a, b, 1)
+
+    def forward(self, x):
+        h = self.conv1(F.interpolate(F.relu(self.norm1(x)), scale_factor=2, mode="nearest"))
+        h = self.conv2(F.relu(self.norm2(h)))
+        return h + self.skip(F.interpolate(x, scale_factor=2, mode="nearest"))
+
+
 class Generator(nn.Module):
     def __init__(self, latent_dim, ch):
         super().__init__()
         widths = [ch * 8, ch * 8, ch * 4, ch * 2, ch, ch]
         self.first = nn.Linear(latent_dim, widths[0] * 16)
-        blocks = []
-        for a, b in zip(widths[:-1], widths[1:]):
-            blocks += [nn.Upsample(scale_factor=2, mode="nearest"), nn.Conv2d(a, b, 3, padding=1),
-                       nn.BatchNorm2d(b), nn.LeakyReLU(0.2), nn.Conv2d(b, b, 3, padding=1),
-                       nn.BatchNorm2d(b), nn.LeakyReLU(0.2)]
-        self.blocks = nn.Sequential(*blocks)
+        self.blocks = nn.Sequential(*[UpBlock(a, b) for a, b in zip(widths[:-1], widths[1:])])
+        self.norm = nn.BatchNorm2d(widths[-1])
         self.out = nn.Conv2d(widths[-1], 3, 3, padding=1)
         self.widths = widths
 
     def forward(self, z):
         x = self.first(z).view(len(z), self.widths[0], 4, 4)
-        return torch.tanh(self.out(self.blocks(x)))
+        return torch.tanh(self.out(F.relu(self.norm(self.blocks(x)))))
+
+
+class DownBlock(nn.Module):
+    def __init__(self, a, b, wrap, first=False, down=True):
+        super().__init__()
+        self.conv1, self.conv2 = wrap(nn.Conv2d(a, b, 3, padding=1)), wrap(nn.Conv2d(b, b, 3, padding=1))
+        self.skip = wrap(nn.Conv2d(a, b, 1))
+        self.first, self.down = first, down
+
+    def forward(self, x):
+        h = self.conv2(F.relu(self.conv1(x if self.first else F.relu(x))))
+        skip = self.skip(x)
+        if self.down:
+            h, skip = F.avg_pool2d(h, 2), F.avg_pool2d(skip, 2)
+        return h + skip
 
 
 class Discriminator(nn.Module):
-    def __init__(self, ch):
+    def __init__(self, ch, spectral_norm=True):
         super().__init__()
-        sn = nn.utils.spectral_norm
-        widths = [ch, ch, ch * 2, ch * 4, ch * 8, ch * 8]
-        layers = [sn(nn.Conv2d(3, widths[0], 3, padding=1)), nn.LeakyReLU(0.2)]
-        for a, b in zip(widths[:-1], widths[1:]):
-            layers += [sn(nn.Conv2d(a, b, 4, stride=2, padding=1)), nn.LeakyReLU(0.2),
-                       sn(nn.Conv2d(b, b, 3, padding=1)), nn.LeakyReLU(0.2)]
-        self.features = nn.Sequential(*layers)
-        self.out = sn(nn.Linear(widths[-1] * 16, 1))
+        wrap = nn.utils.spectral_norm if spectral_norm else (lambda m: m)
+        widths = [3, ch, ch * 2, ch * 4, ch * 8, ch * 8]
+        blocks = [DownBlock(a, b, wrap, first=i == 0) for i, (a, b) in enumerate(zip(widths[:-1], widths[1:]))]
+        blocks.append(DownBlock(widths[-1], widths[-1], wrap, down=False))
+        self.features = nn.Sequential(*blocks)
+        self.out = wrap(nn.Linear(widths[-1], 1))
 
     def forward(self, x):
-        return self.out(self.features(x).flatten(1)).squeeze(1)
+        return self.out(F.relu(self.features(x)).sum(dim=(2, 3))).squeeze(1)
 
 
 def augment(x, policy):
@@ -126,6 +150,10 @@ def main():
     parser.add_argument("--channels", type=int, default=None, help="overrides gan.base_channels")
     parser.add_argument("--steps", type=int, default=None)
     parser.add_argument("--hours", type=float, default=None, help="stop after this much wall-clock time")
+    parser.add_argument("--r1", type=float, default=None, help="overrides gan.r1_weight")
+    parser.add_argument("--no-spectral-norm", action="store_true", help="discriminator without spectral normalisation")
+    parser.add_argument("--batch-size", type=int, default=None)
+    parser.add_argument("--eval-every", type=int, default=None)
     parser.add_argument("--smoke", action="store_true",
                         help="synthetic images, randomly initialised DINOv2, few steps; checks the code path only")
     args = parser.parse_args()
@@ -137,6 +165,14 @@ def main():
     hp = config["gan"]
     if args.channels:
         hp["base_channels"] = args.channels
+    if args.r1 is not None:
+        hp["r1_weight"] = args.r1
+    if args.no_spectral_norm:
+        hp["spectral_norm"] = False
+    if args.batch_size:
+        hp["batch_size"] = args.batch_size
+    if args.eval_every:
+        hp["eval_every"] = args.eval_every
     seed = config["system"]["seed"]
     steps = args.steps or (40 if args.smoke else hp["steps"])
     eval_every = 20 if args.smoke else hp["eval_every"]
@@ -153,14 +189,16 @@ def main():
         hp = {**hp, "batch_size": 16, "base_channels": 16}
     else:
         split = dict(val_percent=config["split"]["val_percent"], test_percent=config["split"]["test_percent"])
-        train_set = ImageDataset(config["paths"]["abstract_art"], size=size, train=True, split="train", **split)
+        train_set = ImageDataset(config["paths"]["abstract_art"], size=size, train=False, split="train", **split)
         test_set = ImageDataset(config["paths"]["abstract_art"], size=size, train=False, split="test", **split)
         dino = DinoFeatures(config["dino"]["size"], config["dino"]["pooling"]).to(device)
-    loader = DataLoader(train_set, batch_size=hp["batch_size"], shuffle=True, drop_last=True, num_workers=0)
+    workers = 0 if sys.platform == "win32" else 4
+    images = torch.cat([(x * 127.5 + 127.5).round().to(torch.uint8)
+                        for x in DataLoader(train_set, batch_size=64, num_workers=workers)]).to(device)
     test_features = features_of(dino, DataLoader(test_set, batch_size=64), device)
 
     generator = Generator(hp["latent_dim"], hp["base_channels"]).to(device)
-    discriminator = Discriminator(hp["base_channels"]).to(device)
+    discriminator = Discriminator(hp["base_channels"], hp["spectral_norm"]).to(device)
     average = copy.deepcopy(generator).eval()
     for p in average.parameters():
         p.requires_grad = False
@@ -187,19 +225,25 @@ def main():
                     "base_channels": hp["base_channels"], "step": step, "seed": seed}, log.dir / "generator.pt")
 
     start, step, done = time.time(), 0, False
+    r1_every = hp["r1_every"]
     while not done:
-        for real in loader:
-            real = real.to(device)
+        for index in torch.randperm(len(images), device=device).split(hp["batch_size"]):
+            if len(index) < hp["batch_size"]:
+                continue
+            real = images[index].float() / 127.5 - 1
+            flip = torch.rand(len(real), device=device) < 0.5
+            real = torch.where(flip.view(-1, 1, 1, 1), real.flip(3), real)
             z = torch.randn(len(real), hp["latent_dim"], device=device)
             fake = generator(z)
             real_in = augment(real, policy)
-            if hp["r1_weight"] > 0:
+            penalise = hp["r1_weight"] > 0 and step % r1_every == 0
+            if penalise:
                 real_in.requires_grad_(True)
             d_real, d_fake = discriminator(real_in), discriminator(augment(fake.detach(), policy))
             loss_d = F.relu(1 - d_real).mean() + F.relu(1 + d_fake).mean()
-            if hp["r1_weight"] > 0:
+            if penalise:
                 grad = torch.autograd.grad(d_real.sum(), real_in, create_graph=True)[0]
-                loss_d = loss_d + 0.5 * hp["r1_weight"] * grad.pow(2).sum(dim=(1, 2, 3)).mean()
+                loss_d = loss_d + 0.5 * hp["r1_weight"] * r1_every * grad.pow(2).sum(dim=(1, 2, 3)).mean()
             opt_d.zero_grad(set_to_none=True)
             loss_d.backward()
             opt_d.step()

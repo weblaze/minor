@@ -1,6 +1,6 @@
 # G-GAN: unconditional generator of abstract art
 
-Status: implemented and smoke-tested on synthetic data. First run on real data launched on 2026-11-14; results are recorded in `docs/run_log.md`. This document contains no results.
+Status: second version. The first version (plain convolutional networks, data loaded from disk) failed on real data; the networks are now residual and the training images are held in memory. Results are recorded in `docs/run_log.md`. This document contains no results.
 
 ## 1. Purpose
 
@@ -9,9 +9,9 @@ Phase 2 replaces the VAE generator of phase 1 by an adversarial generator and la
 ## 2. Method
 
 - Data: training split of the art collection (hash-based split, as in all methods), 128 x 128 px, horizontal flip.
-- Generator: latent vector (128-d, standard normal) -> linear layer to a 4 x 4 map -> five blocks of nearest-neighbour upsampling, two 3 x 3 convolutions, batch normalisation and LeakyReLU -> 3 x 3 convolution, tanh.
-- Discriminator: mirrored, strided convolutions, spectral normalisation, no batch normalisation.
-- Objective: hinge loss. Optional R1 penalty (`gan.r1_weight`).
+- Generator: latent vector (128-d, standard normal) -> linear layer to a 4 x 4 map -> five residual blocks (batch normalisation, ReLU, nearest-neighbour upsampling, two 3 x 3 convolutions, 1 x 1 skip) -> batch normalisation, ReLU, 3 x 3 convolution, tanh.
+- Discriminator: five residual blocks with average pooling and one without, sum pooling, linear output; no batch normalisation. Two regularisers are available: spectral normalisation (`gan.spectral_norm`) or an R1 penalty on real images (`gan.r1_weight`, applied every `gan.r1_every` steps).
+- Objective: hinge loss.
 - Differentiable augmentation (colour, translation, cutout) of real and generated images before the discriminator, for training on a few thousand images.
 - An exponential moving average of the generator weights is saved and evaluated.
 
@@ -23,7 +23,7 @@ Every `gan.eval_every` steps: Frechet and kernel distance (DINOv2 ViT-S/14 CLS f
 
 ## 4. Protocol
 
-`python methods/gan/train_gan.py --seed 0 [--channels 64] [--hours 9]`
+`python methods/gan/train_gan.py --seed 0 [--channels 64] [--hours 9] [--no-spectral-norm --r1 10]`
 
 The run stops at `gan.steps` or after `--hours`. The checkpoint `generator.pt` holds the averaged generator of the last evaluation step.
 

@@ -9,7 +9,9 @@ gan:
   ema: 0.999
   steps: 60000
   augment: "color,translation,cutout"   # differentiable augmentation of real and generated images
+  spectral_norm: true
   r1_weight: 0.0
+  r1_every: 16
   log_every: 100
   eval_every: 5000
   n_eval_samples: 2000
