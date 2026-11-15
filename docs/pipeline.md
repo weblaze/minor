@@ -7,7 +7,7 @@ How the code is laid out, how a stage is run, how a new part is added, how an ex
 ```
 abstraction/                 shared package (pip install -e .)
   data/codes.py              audio-code transforms over MERT layers: mean, standardised, whitened, layer subsets
-  encoders/                  frozen MERT and DINOv2
+  encoders/                  frozen MERT, DINOv2 and CAV-MAE (S4)
   generators/                image generators behind one interface (phase 2 and later)
   pipeline/                  front matter shared by the methods
     cli.py                   parser (--config --seed --tag --code --smoke), config setup, run names

@@ -1,0 +1,22 @@
+# S4 probe: CAV-MAE-Scale++ embeddings of the FMA-small tracks and of the art set, then methods/s4/probe.py.
+# Output: cav_mae_embeddings/ (audio shards, art.npz) and the two run directories under runs/.
+name: abstraction-s4-probe
+branch: pipeline
+gpu: true
+datasets:
+  - imsparsh/fma-free-music-archive-small-medium
+  - arunavganguly/abstraction-cav-mae
+kernels:
+  - "{user}/abstraction-features"
+inputs:
+  FMA: fma_small
+  MERT: mert_embeddings
+  ART_ZIP: abstract_art.zip
+  CAV: audio_model.21.pth
+commands:
+  - nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+  - python -c "import torch, torchaudio, timm; print(torch.__version__, torchaudio.__version__, timm.__version__)"
+  - python -m zipfile -e {ART_ZIP} datasets/
+  - ln -s {MERT} datasets/mert_embeddings
+  - python methods/s4/extract.py --source {FMA} --checkpoint {CAV} --embeddings /kaggle/working/cav_mae_embeddings
+  - python methods/s4/probe.py --embeddings /kaggle/working/cav_mae_embeddings

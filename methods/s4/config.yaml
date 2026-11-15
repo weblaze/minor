@@ -1,0 +1,18 @@
+# S4. Natural audio-visual statistics, taken from a model pretrained on video without text (CAV-MAE-Scale++).
+# No part of this method is trained. None of these values has been validated.
+audio_code:
+  variant: "standardised"   # MERT code the CAV-MAE audio embeddings are compared with
+  whiten_dim: 128
+  layers: null
+
+cav_mae:
+  checkpoint: "models/cav_mae/audio_model.21.pth"
+  embeddings: "datasets/cav_mae_embeddings"
+  tracks_per_batch: 16
+  image_batch_size: 64
+  workers: 4
+
+probe:
+  knn_k: 10
+  n_permutations: 9999
+  n_null: 999               # random re-assignments for the null of an assignment score

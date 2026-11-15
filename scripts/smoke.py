@@ -5,7 +5,7 @@ extractor, a few steps). A step that depends on an earlier output receives the n
 run directory. The script stops at the first failure and exits non-zero.
 
 Usage:
-  python scripts/smoke.py [--methods s1 q1 f1]
+  python scripts/smoke.py [--methods s1 q1 f1 s4]
 """
 import argparse
 import subprocess
@@ -34,6 +34,8 @@ PIPELINES = {
            ("diagnose.py", []),
            ("realism.py", ["--only", "swd", "soft_0.02_swd"]),
            ("orientation.py", ["--seeds", "2"])],
+    "s4": [("extract.py", []),
+           ("probe.py", ["--embeddings", "{s4_extract_smoke}/embeddings"])],
 }
 
 
