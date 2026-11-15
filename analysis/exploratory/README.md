@@ -20,6 +20,8 @@ Conditions of use:
 | `seeds_style.py` | same entry, part C (five mapper seeds) |
 | `ceiling.py` | "2026-11-14 — F1: what limits the painting output (local, exploratory)", parts A to D; part E was computed inline from the cached art features |
 | `night.py` | aggregation for "2026-11-14 — F1 batch at the end of phase 1: orientation votes, combination sweep, reruns (local)" |
+| `valsel.py` | aggregation for "2026-11-15 — F1 combination sweep with selection on the validation tracks (local)" |
+| `second_encoder.py` | "2026-11-15 — structure under two other image encoders (local, evaluation only)" |
 | `check_white.py`, `check_std.py` | checks that the S1 whitened and standardised codes equal the shared implementation |
 
 Not preserved as files (computed inline in the session): the comparison of S1 and Q1 under a common audio code (2026-11-12; now reproduced by `scripts/results.py agreement`), part E of the retrieval-limit entry, and the seed agreement and axis-1 correlations of the three Q1 seeds (2026-11-14).

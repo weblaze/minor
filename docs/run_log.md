@@ -806,3 +806,81 @@ Earlier entries are left as written. This entry resolves inconsistencies between
 - Variance fraction of the first principal axis of the mean code: 0.117 in "exploratory analysis of the seed-0 outputs", where the axes are fitted on individual training windows, and 0.130 in "audio-code axes against FMA metadata", where they are fitted on window-averaged training tracks. Both are correct for their definition. The orientation analyses use window-averaged training tracks.
 - Selection of combinations in "F1 batch at the end of phase 1": the selection rule used scores on the test tracks. The sweep is repeated with selection on the validation tracks (`methods/f1/phase1_validation.py`); its result is logged separately.
 - The scripts of the exploratory entries are now in `analysis/exploratory/`, with a table that maps each script to its entry.
+
+## 2026-11-15 — F1 combination sweep with selection on the validation tracks (local)
+
+- Code: `f1-feature` 219bbd2, `methods/f1/phase1_validation.py`; aggregation `analysis/exploratory/valsel.py`.
+- Runs: `f1_realism_valsweep_{mean,standardised}_{0..3}_seed0_*` (100 combinations per code, seed 0, validation and test scores recorded), `f1_realism_valrerun_{mean,standardised}_seed{1..4}_*`. State: `runs/f1_validation_phase1/`. Wall time 4.6 h on the GTX 1650.
+- Selection rule, validation tracks only: at least 300 distinct paintings, Frechet distance of the painting output to validation art at most 450, ranked by r of the painting output; five best per code plus the baseline, rerun on seeds 1 to 4.
+- Eligible combinations: 59 of 100 (mean code), 57 of 100 (standardised code).
+- Agreement of validation and test r of the painting output over the 100 combinations (seed 0): Pearson 0.975 (mean code), 0.988 (standardised code).
+
+Five seeds, mean (standard deviation). Test columns are free of selection on test data.
+
+Mean code:
+
+| Combination | rank val / test | test r | test kNN | test FD | test distinct | val r | val FD |
+|---|---|---|---|---|---|---|---|
+| `free__swd1__global` (baseline) | 59 / 42 | 0.641 (0.014) | 0.122 (0.007) | 346 (22) | 371 (24) | 0.603 (0.018) | 381 (19) |
+| `st05__swd1_chamfer01__global_local` | 1 / 2 | 0.743 (0.026) | 0.090 (0.005) | 364 (49) | 338 (39) | 0.731 (0.024) | 347 (40) |
+| `st05__swd1_chamfer01__global` | 2 / 1 | 0.747 (0.008) | 0.079 (0.003) | 375 (31) | 330 (19) | 0.731 (0.013) | 361 (29) |
+| `soft02__swd1_chamfer01__global3` | 3 / 3 | 0.737 (0.014) | 0.145 (0.005) | 340 (21) | 359 (16) | 0.716 (0.014) | 359 (8) |
+| `st05__swd1_energy1__global_local` | 4 / 7 | 0.712 (0.013) | 0.126 (0.005) | 353 (18) | 346 (18) | 0.701 (0.017) | 335 (13) |
+| `st05__energy1__global_local` | 5 / 4 | 0.704 (0.020) | 0.128 (0.005) | 371 (12) | 323 (13) | 0.692 (0.019) | 354 (21) |
+
+Standardised code:
+
+| Combination | rank val / test | test r | test kNN | test FD | test distinct | val r | val FD |
+|---|---|---|---|---|---|---|---|
+| `free__swd1__global` (baseline) | 62 / 67 | 0.556 (0.012) | 0.137 (0.007) | 338 (13) | 394 (20) | 0.559 (0.015) | 367 (15) |
+| `st05__swd1_chamfer01__global3` | 1 / 1 | 0.641 (0.007) | 0.132 (0.007) | 393 (9) | 389 (15) | 0.643 (0.004) | 423 (15) |
+| `st05__energy1__global_views` | 5 / 10 | 0.615 (0.016) | 0.162 (0.004) | 298 (7) | 385 (5) | 0.623 (0.016) | 304 (9) |
+| `soft02__swd1__global_views` | 9 / 22 | 0.602 (0.012) | 0.167 (0.008) | 446 (30) | 307 (10) | 0.613 (0.017) | 439 (30) |
+| `st05__swd5__global3` | 10 / 5 | 0.624 (0.005) | 0.152 (0.003) | 423 (14) | 302 (7) | 0.627 (0.003) | 432 (12) |
+| `st05__swd5__global_views` | 12 / 27 | 0.610 (0.005) | 0.159 (0.006) | 345 (7) | 348 (12) | 0.615 (0.008) | 353 (10) |
+
+Ranks are by r of the painting output at seed 0 over all 100 combinations, without the eligibility filter.
+
+Result:
+
+- Selection on validation tracks returns the same leading combinations as the earlier selection on test tracks: `st05__swd1_chamfer01__global` and `soft02__swd1_chamfer01__global3` for the mean code, `st05__swd1_chamfer01__global3` for the standardised code. Their five-seed test values equal those of the batch of 2026-11-14 (0.747, 0.737, 0.641) to the third decimal or within 0.001.
+- The gain over the baseline is 0.10 (mean code) and 0.085 (standardised code) in test r; it is not an effect of selecting on test data.
+- The baseline reproduces: 0.641 (0.014) and 0.556 (0.012).
+- The straight-through head with the chamfer term gives the highest r and the lowest kNN overlap (0.08 to 0.09, mean code); `soft02__swd1_chamfer01__global3` keeps kNN overlap at 0.145 with r 0.737.
+- The selection note in the corrections entry of 2026-11-14 is resolved by this entry.
+
+## 2026-11-15 — structure under two other image encoders (local, evaluation only)
+
+- Script: `analysis/exploratory/second_encoder.py` (stages `gen_s1q1`, `gen_f1`, `eval`). Run by a subagent; numbers checked against its `results.json`.
+- Question: is the audio-to-image structure of the S1, Q1 and F1 outputs specific to DINOv2, the encoder used in the training losses?
+- Encoders: DINOv2 ViT-S/14 (reference, CLS), MAE ViT-B/16 (`facebook/vit-mae-base`, mask ratio 0, mean of patch tokens), DINO v1 ViT-B/16 (`facebook/dino-vitb16`, loaded from the safetensors conversion at `refs/pr/1`; not compared with the original weights). Neither MAE nor DINO v1 is used in any training loss.
+- Measure: Mantel r and kNN overlap (k = 10) between audio-code distances and image-feature distances, 789 test tracks. F1 mappings retrained locally with `realism.fit`, mean code, seed 0, 4000 steps. Frechet distance not computed.
+- Check: the DINOv2 column reproduces the logged values for every set (largest difference 0.005, for the retrained F1 combination).
+
+| Image set | DINOv2 r | DINOv2 kNN | DINO v1 r | DINO v1 kNN | MAE r | MAE kNN |
+|---|---|---|---|---|---|---|
+| S1 `s1` | 0.861 | 0.268 | 0.508 | 0.220 | 0.232 | 0.096 |
+| S1 `s0` (control) | 0.082 | 0.085 | 0.251 | 0.111 | 0.249 | 0.077 |
+| S1 `shuffled` (control) | 0.140 | 0.049 | 0.175 | 0.107 | 0.149 | 0.074 |
+| Q1 mean code, seed 0 | 0.825 | 0.282 | 0.453 | 0.244 | 0.233 | 0.139 |
+| Q1 mean code, seed 1 | 0.815 | 0.284 | 0.479 | 0.255 | 0.219 | 0.125 |
+| Q1 mean code, seed 2 | 0.818 | 0.290 | 0.448 | 0.257 | 0.172 | 0.133 |
+| Q1 `shuffled` (control) | 0.209 | 0.163 | 0.146 | 0.170 | 0.102 | 0.108 |
+| Q1 `no_feat` | 0.869 | 0.392 | 0.621 | 0.307 | 0.408 | 0.130 |
+| Q1 standardised code | 0.797 | 0.351 | 0.625 | 0.316 | 0.313 | 0.163 |
+| F1 baseline, nearest painting | 0.645 | 0.132 | 0.404 | 0.108 | 0.084 | 0.097 |
+| F1 `soft02__swd1_chamfer01__global3` | 0.732 | 0.142 | 0.479 | 0.116 | 0.065 | 0.101 |
+| F1 untrained mapper, standardised code | 0.066 | 0.038 | 0.067 | 0.037 | 0.016 | 0.036 |
+
+Participation ratio of the features of the 595 test paintings: DINOv2 44.8, DINO v1 68.6, MAE 1.6.
+
+Result:
+
+- DINO v1: the structure is present in every trained set, at r 0.40 to 0.63 against 0.07 to 0.25 for the controls. It is lower than under DINOv2 (0.65 to 0.87). kNN overlap is close to the DINOv2 values for S1 and Q1 (0.22 to 0.32 against 0.27 to 0.39).
+- The structure is therefore not only a property of the DINOv2 feature space; a second self-supervised encoder that was not in the loss sees about 55 to 80 % of the r value.
+- Under DINO v1 the order of the sets differs: Q1 standardised code (0.625) and Q1 `no_feat` (0.621) are above S1 `s1` (0.508) and Q1 mean code (0.45 to 0.48).
+- S1 `s0` reads 0.251 under DINO v1 and 0.249 under MAE, against 0.082 under DINOv2. The margin of S1 `s1` over its control under DINO v1 is 0.26.
+- MAE: the mean-patch features are close to one-dimensional on this collection (participation ratio 1.6). Controls score as high as trained sets. The MAE column does not discriminate and gives no evidence in either direction.
+- F1 untrained mapper on the mean code gave 0.036 in this rerun; no logged value exists for that setting (the logged 0.066 is for the standardised code), and the other encoders were not run on it.
+
+Limitations: one seed for S1 and F1; MAE feature pooling was not varied (CLS token or a normalised layer could behave differently).
