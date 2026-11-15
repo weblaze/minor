@@ -6,10 +6,18 @@ Versioning scheme: `vX.Y.Z` — `X` = approach being delivered (v1 = approach 01
 
 ## [Unreleased]
 
-### Added (branch `s1-structure`)
-- S1: spatial VAE (GroupNorm, residual blocks), mapping trained with sliced Wasserstein and distance-correlation losses, variants s0, s1_cycle and shuffled, evaluation script, method description in `methods/s1/README.md`
-### Added (branch `q1-structure`)
-- Q1: vector-latent VAE, sampleability gate, audio-code transforms (standardised, whitened), mapping trained with feature-space and latent sliced Wasserstein, distance-correlation and neighbour-distribution losses, variants no_local, no_global, no_feat and shuffled, Stage 0 diagnostics, PCA-alignment and retrieval baselines, seed-agreement script, method description in `methods/q1/README.md`
+### Added (branch `pipeline`)
+- All methods on one branch; `abstraction/pipeline/`: shared parser and setup, run names, MERT layers and splits, audio codes, art datasets and synthetic smoke data, DINOv2 builder and feature extraction, structure and distribution scores, genre leakage. The method `common.py` files keep only method-specific code. Numbers of every smoke run unchanged (`scripts/regression.py`)
+- `abstraction/generators/`: generator interface (load, decode to [-1, 1], latent shape, latent scale, optional encode) with the S1 spatial VAE and the Q1 vector VAE as implementations; `--generator` option of the S1 and Q1 stages that load a VAE (default: the method's VAE)
+- `scripts/run.py`: one front door, `python scripts/run.py <method> <stage> [args...]`, `--list`
+- `scripts/kaggle/make_job.py`: Kaggle job from an experiment description (setup commands and chains of stage commands split over two GPUs); `scripts/kaggle/experiments/q1_mean_seeds12.yaml` as example
+- `scripts/regression.py`: numerical regression check over the smoke pipelines of all methods (baseline and comparison, CPU forced)
+- `docs/pipeline.md`: layout, front door, adding an audio code, bridge, generator or evaluation, experiments and jobs, regression check
+
+### Changed (branch `pipeline`)
+- Q1 uses the shared audio-code transform of `abstraction/data/codes.py` (bit-identical codes); its mapper checkpoints now also store the layer indices, and checkpoints without them are still read. S1 keeps its own transform, whose float64 statistics differ from the shared one in the last bits
+- `abstraction/data/codes.py`: a transform without layer indices (Q1 checkpoints written before this change) applies to all layers
+- `methods/q1/data.py` removed; its contents are in `abstraction/pipeline/data.py` and `abstraction/data/codes.py`
 
 ### Added (branch `base`)
 - Frozen encoders: MERT-v1-95M (per-layer, time-averaged) and DINOv2 ViT-S/14 (differentiable with respect to the image)
@@ -27,11 +35,11 @@ Versioning scheme: `vX.Y.Z` — `X` = approach being delivered (v1 = approach 01
 - `scripts/smoke.py`: smoke pipeline of every method on a branch
 
 ### Added (branch `s1-structure`)
-- S1: spatial VAE, mapping with latent sliced Wasserstein and distance-correlation terms, variants `s1`, `s0`, `s1_cycle`, `shuffled`, evaluation
+- S1: spatial VAE (GroupNorm, residual blocks), mapping trained with latent sliced Wasserstein and distance-correlation losses, variants `s1`, `s0`, `s1_cycle` and `shuffled`, evaluation script, method description in `methods/s1/README.md`
 - `--code` option: mean, standardised or whitened audio code
 
 ### Added (branch `q1-structure`)
-- Q1: vector VAE, sampleability gate, diagnostics D1 to D3, baselines, mapping with feature-space and latent distribution terms and global and local structure terms, evaluation, seed comparison
+- Q1: vector-latent VAE, sampleability gate, audio-code transforms (standardised, whitened), Stage 0 diagnostics D1 to D3, PCA-alignment and retrieval baselines, mapping trained with feature-space and latent sliced Wasserstein, distance-correlation and neighbour-distribution losses, variants `no_local`, `no_global`, `no_feat` and `shuffled`, evaluation, seed-agreement script, method description in `methods/q1/README.md`
 - `--code` option; Kaggle jobs for the KL-weight sweep, the code swap and the standardised code
 
 ### Added (branch `f1-feature`)

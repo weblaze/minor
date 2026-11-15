@@ -56,7 +56,7 @@ B-time is applied to all methods available at that point. D-human and D-complexi
 
 D-vote, D-ease, D-loss and D-S4 are applied wherever they are expected to give usable data. D-S4 requires an S4 model and is available from phase 2.
 
-Every evaluated run is collected by `scripts/results.py` into `docs/results.md` and `docs/results.csv`; `scripts/smoke.py` runs the smoke pipeline of every method on a branch.
+Every evaluated run is collected by `scripts/results.py` into `docs/results.md` and `docs/results.csv`; `scripts/smoke.py` runs the smoke pipeline of every method on a branch. On branch `pipeline`, where all methods share one tree, `scripts/regression.py` checks that a code change leaves the numbers of those smoke runs unchanged, and `docs/pipeline.md` describes how bridges, generators and evaluations are added.
 
 ## After all methods
 

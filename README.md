@@ -61,6 +61,7 @@ Human judging closes each phase. The full plan and the meaning of every identifi
 | [methods/s1/README.md](https://github.com/weblaze/minor/blob/s1-structure/methods/s1/README.md) | `s1-structure` | S1: method, variants, hypotheses, protocol |
 | [methods/q1/README.md](https://github.com/weblaze/minor/blob/q1-structure/methods/q1/README.md) | `q1-structure` | Q1: method, diagnostics, gate, baselines, protocol |
 | [methods/f1/README.md](https://github.com/weblaze/minor/blob/f1-feature/methods/f1/README.md) | `f1-feature` | F1: method, staged diagnosis, experiment grid |
+| [docs/pipeline.md](https://github.com/weblaze/minor/blob/pipeline/docs/pipeline.md) | `pipeline` | Code layout, front door `scripts/run.py`, adding codes, bridges, generators and evaluations, experiments to Kaggle jobs, regression check |
 | [scripts/kaggle/README.md](https://github.com/weblaze/minor/blob/base/scripts/kaggle/README.md) | `base` | Job runner for free GPU sessions |
 | [CHANGELOG.md](CHANGELOG.md) | `main` | Versions and additions per branch |
 
@@ -69,6 +70,7 @@ Human judging closes each phase. The full plan and the meaning of every identifi
 - Every run writes a directory with its configuration, git commit, seed, software versions and metrics.
 - Train, validation and test splits are fixed by a hash of the track identifier or file name.
 - `python scripts/smoke.py` (branch `base` and method branches) runs each method end to end on synthetic data to verify the code path.
+- `python scripts/regression.py --compare <baseline>` (branch `pipeline`) checks that a code change leaves every number of the smoke runs unchanged.
 - `python scripts/results.py table` rebuilds the results table from the run directories; `python scripts/results.py agreement` compares runs on the same tracks.
 - Protocol rules are fixed before runs; where a run departs from them the run log states the deviation.
 

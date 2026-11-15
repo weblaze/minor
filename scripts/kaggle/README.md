@@ -19,6 +19,20 @@ python scripts/kaggle/launch.py fetch  scripts/kaggle/jobs/<job>.yaml
 
 `push` creates or replaces the private kernel `<user>/<slug of name>` and starts it. `fetch` downloads the kernel output to `runs/kaggle/<slug>/`. `push --dry-run DIR` writes the kernel files to `DIR` without contacting Kaggle.
 
+## Writing a job from an experiment
+
+Jobs that run stages on both GPUs of a session are generated from a short experiment file instead of being written by hand:
+
+```bash
+python scripts/kaggle/make_job.py scripts/kaggle/experiments/<name>.yaml           # writes scripts/kaggle/jobs/<name>.yaml
+python scripts/kaggle/make_job.py scripts/kaggle/experiments/<name>.yaml --print   # prints it instead
+python scripts/kaggle/make_job.py <experiment> --compare scripts/kaggle/jobs/<job>.yaml
+```
+
+The experiment file has the job keys `name`, `branch`, `gpu` (default true), `datasets`, `kernels` and `inputs`, a `description` (written as the header comment), `setup` (commands run first) and `chains`. A chain is a list of commands run one after another on one GPU; a command is written as for `scripts/run.py` (`q1 train_mapper --seed 1 ...`) and becomes `python methods/q1/train_mapper.py --seed 1 ...`. Chain i runs on GPU i mod `--gpus` (default 2); each GPU logs to `runs/gpu<i>.log`; the job waits for every GPU and fails if any failed. `{NAME}` refers to an input; every other brace is escaped for `str.format` in the kernel, so `${var}` is written as in a shell. An existing job file is not overwritten without `--force`.
+
+`experiments/q1_mean_seeds12.yaml` reproduces `jobs/q1_mean_seeds12.yaml` (check with `--compare`). The generated exit line is `exit $((r0 != 0 || r1 != 0))`; the hand-written `exit $((r0 + r1))` would succeed if the return codes summed to 256. Because all methods are on one branch, a generated job can run S1 and Q1 stages side by side without the second clone used in `jobs/code_swap.yaml`. See `docs/pipeline.md`.
+
 ## What a kernel does
 
 `kernel.py` clones the repository at the commit of the job, installs it, links `runs/` to `/kaggle/working/runs`, resolves the job inputs under `/kaggle/input`, and runs the commands in order, stopping at the first failure. It writes `job.json` (commit, resolved inputs, return code and duration per command) and `logs/NN.log` to the kernel output.

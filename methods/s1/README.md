@@ -60,6 +60,8 @@ Splits: tracks and images are assigned to train (80 %), validation (10 %) and te
 
 Every run writes a directory under `runs/` with `config.yaml`, `meta.json` (git commit, uncommitted-changes flag, seed, software versions, device), `metrics.jsonl` and, for evaluation, `results.json` and `features.npz`.
 
+Stages that load the VAE take `--generator` (default `spatial_vae`), which selects the implementation of `abstraction.generators` loaded from `--vae`; see `docs/pipeline.md`. Every stage can also be started as `python scripts/run.py s1 <stage> [args...]`.
+
 `--smoke` replaces the data with synthetic codes and images and DINOv2 with a randomly initialised network. It verifies that the code runs; its numbers have no meaning.
 
 ## 6. Evaluation (test split, one image per track from the mean of its window codes)
