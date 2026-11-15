@@ -28,12 +28,15 @@ import torch.nn.functional as F
 
 from abstraction.losses.distribution import sliced_wasserstein
 from abstraction.losses.structure import distance_correlation_loss, pairwise_distances
+from abstraction.generators import load_generator
 from abstraction.models.mapper import Mapper
+from abstraction.pipeline.cli import setup
+from abstraction.pipeline.data import art_dataset, sample_windows
+from abstraction.pipeline.features import build_dino
 from abstraction.utils.runlog import RunLog, set_seed
 
-from common import (base_parser, build_dino, build_mapper, code_dim, encode_images, generate, latent_dim,
-                    load_vae, setup)
-from data import art_dataset, load_codes, sample_windows
+from common import base_parser, build_mapper, code_dim, encode_images, generate, latent_dim, run_name
+from data import load_codes
 
 VARIANTS = {
     "s1": (True, False, False),
@@ -44,7 +47,7 @@ VARIANTS = {
 
 
 def main():
-    parser = base_parser(__doc__)
+    parser = base_parser(__doc__, generator=True)
     parser.add_argument("--vae", required=True)
     parser.add_argument("--variant", choices=sorted(VARIANTS), default="s1")
     parser.add_argument("--lambda-struct", type=float, default=None)
@@ -59,11 +62,11 @@ def main():
     use_struct, use_cycle, shuffle = VARIANTS[args.variant]
     set_seed(seed)
     config["run"] = {"variant": args.variant, "vae": str(args.vae), "steps": steps,
-                     "code": config["audio_code"]["variant"]}
-    log = RunLog(config["paths"]["runs_dir"], f"s1_mapper_{args.variant}" + ("_smoke" if args.smoke else ""),
-                 config, seed)
+                     "code": config["audio_code"]["variant"], "generator": args.generator}
+    log = RunLog(config["paths"]["runs_dir"], run_name(f"mapper_{args.variant}", args.smoke), config, seed)
 
-    vae, latent_std = load_vae(args.vae, config, device)
+    generator = load_generator(args.generator, args.vae, config, device)
+    latent_std = generator.latent_scale
     dino = build_dino(config, device, args.smoke)
     _, train_codes = load_codes(config, "train", args.smoke)
     _, val_codes = load_codes(config, "val", args.smoke)
@@ -72,12 +75,12 @@ def main():
     code_mean = train_codes.mean(dim=(0, 1))
     code_std = train_codes.std(dim=(0, 1)) + 1e-6
 
-    real = encode_images(vae, art_dataset(config, "train", False, args.smoke), device) / latent_std
-    real_val = encode_images(vae, art_dataset(config, "val", False, args.smoke), device) / latent_std
+    real = encode_images(generator, art_dataset(config, "train", False, args.smoke), device) / latent_std
+    real_val = encode_images(generator, art_dataset(config, "val", False, args.smoke), device) / latent_std
     real, real_val = real.to(device), real_val.to(device)
 
-    mapper = build_mapper(config).to(device)
-    inverse = Mapper(latent_dim(config), code_dim(config), hp["hidden"], hp["depth"]).to(device) if use_cycle else None
+    mapper = build_mapper(config, generator).to(device)
+    inverse = Mapper(latent_dim(generator), code_dim(config), hp["hidden"], hp["depth"]).to(device) if use_cycle else None
     params = list(mapper.parameters()) + (list(inverse.parameters()) if use_cycle else [])
     optimiser = torch.optim.AdamW(params, lr=hp["lr"])
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimiser, lambda s: 0.5 * (1 + math.cos(math.pi * s / steps)))
@@ -94,7 +97,7 @@ def main():
         computed when `permute` is None (validation), so that all variants report all terms."""
         evaluate_all = permute is None
         with torch.autocast(device.type, enabled=use_amp):
-            images, z = generate(mapper, vae, latent_std, codes, code_mean, code_std, config)
+            images, z = generate(mapper, generator, codes, code_mean, code_std)
             features = dino(images).float() if (use_struct or evaluate_all) else None
         z = z.float()
         l_dist = sliced_wasserstein(z, real_latents, hp["swd_projections"])

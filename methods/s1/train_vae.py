@@ -18,10 +18,12 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torchvision.utils import save_image
 
+from abstraction.pipeline.cli import setup
+from abstraction.pipeline.data import art_dataset
+from abstraction.pipeline.features import build_dino
 from abstraction.utils.runlog import RunLog, set_seed
 
-from common import base_parser, build_dino, build_vae, encode_images, setup
-from data import art_dataset
+from common import base_parser, build_vae, encode_images, run_name
 
 
 def main():
@@ -33,7 +35,7 @@ def main():
     seed = config["system"]["seed"]
     epochs = args.epochs or (2 if args.smoke else hp["epochs"])
     set_seed(seed)
-    log = RunLog(config["paths"]["runs_dir"], "s1_vae" + ("_smoke" if args.smoke else ""), config, seed)
+    log = RunLog(config["paths"]["runs_dir"], run_name("vae", args.smoke), config, seed)
 
     train_set = art_dataset(config, "train", True, args.smoke)
     val_set = art_dataset(config, "val", False, args.smoke)

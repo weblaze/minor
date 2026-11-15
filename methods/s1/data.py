@@ -1,8 +1,5 @@
 import numpy as np
-import torch
-from torch.utils.data import Dataset
 
-from abstraction.data.datasets import ImageDataset
 from abstraction.data.embeddings import load_shards
 from abstraction.data.splits import split_of
 
@@ -14,6 +11,10 @@ def load_codes(config, split, smoke=False):
     standardised  each layer z-scored per dimension, then averaged (d = 768); fitted on training tracks
     whitened      standardised, centred, projected on the leading `whiten_dim` principal axes and
                   scaled to unit variance
+
+    Kept apart from abstraction.data.codes: these float64 statistics differ from the shared
+    transform in the last bits, so replacing it would change S1 runs on the standardised and
+    whitened codes.
     """
     if smoke:
         ids, codes = _synthetic_codes()
@@ -52,21 +53,6 @@ def _standardised(train_layers, layers, whiten_dim=None):
     return ((standardised(layers) - centre) @ projection).astype(np.float32)
 
 
-def sample_windows(codes, batch_size, generator):
-    """One randomly chosen window from each of `batch_size` distinct tracks."""
-    tracks = torch.randperm(codes.shape[0], generator=generator)[:batch_size]
-    windows = torch.randint(codes.shape[1], (len(tracks),), generator=generator)
-    return codes[tracks, windows]
-
-
-def art_dataset(config, split, train, smoke=False):
-    if smoke:
-        return SyntheticImages(160 if split == "train" else 96, config["image_size"], seed=len(split))
-    return ImageDataset(config["paths"]["abstract_art"], size=config["image_size"], train=train, split=split,
-                        val_percent=config["split"]["val_percent"],
-                        test_percent=config["split"]["test_percent"])
-
-
 def _synthetic_codes(n_tracks=600, n_windows=3, dim=768, n_clusters=8, seed=0):
     rng = np.random.default_rng(seed)
     centres = rng.normal(size=(n_clusters, dim))
@@ -74,17 +60,3 @@ def _synthetic_codes(n_tracks=600, n_windows=3, dim=768, n_clusters=8, seed=0):
     codes = tracks[:, None, :] + 0.1 * rng.normal(size=(n_tracks, n_windows, dim))
     return [f"synthetic_{i:05d}" for i in range(n_tracks)], codes.astype(np.float32)
 
-
-class SyntheticImages(Dataset):
-    """Random low-frequency colour fields. For smoke runs only."""
-
-    def __init__(self, n, size, seed):
-        g = torch.Generator().manual_seed(seed)
-        low = torch.rand(n, 3, 4, 4, generator=g) * 2 - 1
-        self.images = torch.nn.functional.interpolate(low, size=(size, size), mode="bicubic").clamp(-1, 1)
-
-    def __len__(self):
-        return len(self.images)
-
-    def __getitem__(self, idx):
-        return self.images[idx]

@@ -21,43 +21,25 @@ Usage:
   python methods/s1/evaluate.py --vae runs/<vae run>/vae.pt --mapper runs/<run>/mapper.pt
   python methods/s1/evaluate.py --vae runs/<vae run>/vae.pt --seed 0
 """
-import csv
-
 import numpy as np
 import torch
-from sklearn.linear_model import LogisticRegression
-from sklearn.manifold import trustworthiness
-from sklearn.model_selection import cross_val_score
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
 from torchvision.utils import save_image
 
-from abstraction.metrics.distribution import frechet_distance, kernel_distance
+from abstraction.generators import load_generator
 from abstraction.metrics.geometry import participation_ratio
-from abstraction.metrics.structure import distance_matrix, knn_overlap, mantel
+from abstraction.pipeline.cli import setup
+from abstraction.pipeline.data import art_dataset
+from abstraction.pipeline.features import build_dino, features_of_dataset
+from abstraction.pipeline.scores import (distribution_scores, genre_leakage, mean_pairwise_distance,
+                                         structure_scores)
 from abstraction.utils.runlog import RunLog, set_seed
 
-from common import base_parser, build_dino, build_mapper, features_of_dataset, generate, load_vae, setup
-from data import art_dataset, load_codes
-
-
-def genre_leakage(track_ids, image_features, codes, genres_csv):
-    with open(genres_csv, newline="", encoding="utf-8") as f:
-        genre_of = {row["track_id"].lstrip("0"): row["genre"] for row in csv.DictReader(f)}
-    keep = [i for i, t in enumerate(track_ids) if t.lstrip("0") in genre_of]
-    labels = np.array([genre_of[track_ids[i].lstrip("0")] for i in keep])
-    _, counts = np.unique(labels, return_counts=True)
-
-    def probe(x):
-        model = make_pipeline(StandardScaler(), LogisticRegression(max_iter=2000))
-        return float(cross_val_score(model, x[keep], labels, cv=5).mean())
-
-    return {"n_tracks": len(keep), "n_genres": len(counts), "majority_rate": float(counts.max() / counts.sum()),
-            "accuracy_from_images": probe(image_features), "accuracy_from_audio": probe(codes)}
+from common import base_parser, build_mapper, generate, run_name
+from data import load_codes
 
 
 def main():
-    parser = base_parser(__doc__)
+    parser = base_parser(__doc__, generator=True)
     parser.add_argument("--vae", required=True)
     parser.add_argument("--mapper", default=None)
     parser.add_argument("--genres", default=None)
@@ -69,12 +51,12 @@ def main():
     hp = config["eval"]
     n_perm = args.permutations or (199 if args.smoke else hp["n_permutations"])
 
-    vae, latent_std = load_vae(args.vae, config, device)
+    generator = load_generator(args.generator, args.vae, config, device)
     dino = build_dino(config, device, args.smoke)
     state = torch.load(args.mapper, map_location=device, weights_only=True) if args.mapper else None
     if state is not None:
         config["audio_code"]["variant"] = state.get("code", "mean")
-    mapper = build_mapper(config).to(device).eval()
+    mapper = build_mapper(config, generator).to(device).eval()
     track_ids, test_codes = load_codes(config, "test", args.smoke)
     if state is not None:
         mapper.load_state_dict(state["model"])
@@ -85,58 +67,44 @@ def main():
         code_mean, code_std = train.mean(dim=(0, 1)), train.std(dim=(0, 1)) + 1e-6
         variant = "random"
     config["run"] = {"variant": variant, "vae": str(args.vae), "mapper": args.mapper,
-                     "code": config["audio_code"]["variant"]}
-    log = RunLog(config["paths"]["runs_dir"], f"s1_eval_{variant}" + ("_smoke" if args.smoke else ""), config, seed)
+                     "code": config["audio_code"]["variant"], "generator": args.generator}
+    log = RunLog(config["paths"]["runs_dir"], run_name(f"eval_{variant}", args.smoke), config, seed)
 
     codes = test_codes.mean(axis=1)
     features, first_images = [], None
     with torch.no_grad():
         for start in range(0, len(codes), 64):
             batch = torch.from_numpy(codes[start:start + 64]).to(device)
-            images, _ = generate(mapper, vae, latent_std, batch, code_mean, code_std, config)
+            images, _ = generate(mapper, generator, batch, code_mean, code_std)
             features.append(dino(images).float().cpu())
             if first_images is None:
                 first_images = images.cpu()
     features = torch.cat(features).numpy()
     save_image(first_images * 0.5 + 0.5, log.dir / "samples.png", nrow=8)
 
-    d_audio = distance_matrix(codes)
-    d_image = distance_matrix(features)
-    r_pearson, p_pearson = mantel(d_audio, d_image, "pearson", n_perm, seed)
-    r_spearman, p_spearman = mantel(d_audio, d_image, "spearman", n_perm, seed)
-    k = hp["knn_k"]
-    overlap, chance = knn_overlap(d_audio, d_image, k)
-    unit = features / np.linalg.norm(features, axis=1, keepdims=True)
+    structure = structure_scores(codes, features, hp["knn_k"], n_perm, seed)
     results = {
         "variant": variant, "n_test_tracks": len(codes), "n_permutations": n_perm,
-        "structure": {
-            "mantel_pearson": r_pearson, "mantel_pearson_p": p_pearson,
-            "mantel_spearman": r_spearman, "mantel_spearman_p": p_spearman,
-            "knn_k": k, "knn_overlap": overlap, "knn_overlap_chance": chance,
-            "trustworthiness": float(trustworthiness(d_audio, unit, n_neighbors=k, metric="precomputed")),
-        },
+        "structure": {k: v for k, v in structure.items() if k not in ("n_tracks", "n_permutations")},
     }
 
     test_art = features_of_dataset(dino, art_dataset(config, "test", False, args.smoke), device).numpy()
     train_set = art_dataset(config, "train", False, args.smoke)
     train_art = features_of_dataset(dino, train_set, device).numpy()
     recon_art = features_of_dataset(dino, train_set, device,
-                                    transform=lambda x: vae.decode(vae.encode(x)[0])).numpy()
-    iu = np.triu_indices(len(features), k=1)
-    it = np.triu_indices(len(test_art), k=1)
+                                    transform=lambda x: generator.decode(generator.encode(x)[0])).numpy()
 
     def against_test_art(x):
-        kid_mean, kid_std = kernel_distance(x, test_art, seed=seed)
-        return {"n": len(x), "frechet_distance": frechet_distance(x, test_art),
-                "kernel_distance": kid_mean, "kernel_distance_std": kid_std}
+        scores = distribution_scores(x, test_art, seed)
+        return {k: v for k, v in scores.items() if k != "n_reference"}
 
     results["image_distribution"] = {
         "n_test_art": len(test_art),
         "generated": against_test_art(features),
         "reference_train_art": against_test_art(train_art),
         "reference_vae_reconstructions": against_test_art(recon_art),
-        "mean_pairwise_distance_generated": float(d_image[iu].mean()),
-        "mean_pairwise_distance_test_art": float(distance_matrix(test_art)[it].mean()),
+        "mean_pairwise_distance_generated": mean_pairwise_distance(features),
+        "mean_pairwise_distance_test_art": mean_pairwise_distance(test_art),
         "participation_ratio_generated": participation_ratio(features),
         "participation_ratio_test_art": participation_ratio(test_art),
         "participation_ratio_audio": participation_ratio(codes),
