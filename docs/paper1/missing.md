@@ -47,7 +47,7 @@ The following were run from scripts not in the repository. Their scripts must be
 
 ## 4. Inconsistencies to resolve
 
-- S1 `s0` Mantel r: 0.083 in "2026-11-12 — S1 seed 0, all variants, test split"; 0.082 in "2026-11-12 — comparison of S1 and Q1 under a common audio code" and in `docs/results.md`. One of the two is a rounding or transcription difference; check `results.json` of `s1_eval_s0_seed0_20261112T062319Z`.
+- S1 `s0` Mantel r: 0.083 in "2026-11-12 — S1 seed 0, all variants, test split"; 0.082 in "2026-11-12 — comparison of S1 and Q1 under a common audio code" and in `docs/results.md`. Resolved 2026-11-15: `results.json` of `s1_eval_s0_seed0_20261112T062319Z` gives 0.08246; `paper.md` uses 0.082.
 - F1 commit: `docs/results.md` gives `4234cad` for `f1_eval_f1_seed0_20261112T213235Z` and `f1_eval_f0_seed0_20261112T213913Z`; the run log gives `aa6783c`.
 - The same nominal F1 configuration (standardised code, SWD, `lambda_struct` 1, seed 0) gives painting r 0.572 (diagnosis), 0.573 (grid `swd`) and 0.578 (`train_mapper.py` variant `f1`); the mean code gives 0.644 (diagnosis), 0.645 (grid) and 0.637 (precursor, 2026-11-12). The differences come from separate runs of different scripts; the paper must state which number is the reference.
 - kNN overlap of the same mean-code `swd` painting output: 0.131 (grid) and 0.132 (interpolation table, t = 1); direct output 0.698 (precursor) and 0.696 (interpolation, t = 0).
@@ -56,6 +56,8 @@ The following were run from scripts not in the repository. Their scripts must be
 - `README.md` on `base` states "All results are from a single seed"; this is no longer true after the 2026-11-14 entries. Not edited here (outside scope).
 
 ## 5. Citations to verify
+
+Status 2026-11-15: the arXiv entries of references [1] to [16] of `paper.md` were checked against arxiv.org (identifier, title, authors, venue as given in the arXiv comments). arXiv 2407.14957 is titled "Strongly Isomorphic Neural Optimal Transport Across Incomparable Spaces" (Sotiropoulou and Alvarez-Melis). References [17] to [37] (standard methods and models) were written from memory and have not been checked against the publications.
 
 Every citation in `outline.md` is marked "to verify". For each: confirm the arXiv identifier, title, authors, year and published venue, and that the role assigned in the outline matches the paper's content. In particular:
 
@@ -66,6 +68,8 @@ Every citation in `outline.md` is marked "to verify". For each: confirm the arXi
 - Mantel test, sliced Wasserstein distance, energy distance, Frechet distance on DINOv2 features, participation ratio, Cramer V: standard references to be chosen.
 
 ## 6. Text and presentation
+
+Status 2026-11-15: a full draft is in `paper.md`, figures in `figures/` (script `make_figures.py`). Open in the draft: affiliations, author contributions, funding, licence, venue format.
 
 - A statement of the hypotheses as pre-registered in the method READMEs, and which were tested, partly tested or not tested.
 - A single reference table of FD reference values (training art 113.3; reconstructions 163.0, 208.5, 576.8).
