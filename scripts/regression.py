@@ -77,7 +77,7 @@ def run_pipelines(methods):
                                   env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
             if code.returncode != 0:
                 print(code.stderr[-2000:])
-                raise SystemExit(f"{method} {script} failed")
+                raise SystemExit(f"{method} {script} failed with return code {code.returncode}")
             new = sorted(set(RUNS.iterdir()) - before)
             for run in new:
                 values.update(values_of(run, f"{method}/{step:02d}_{script}/{STAMP.sub('', run.name)}"))
