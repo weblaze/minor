@@ -1,0 +1,25 @@
+# G-GAN with the R1 penalty (no spectral normalisation), base_channels 64, seed 0.
+# GPU 0: mixed precision (--amp). GPU 1: float32. Each run stops at 150000 steps or after 6 hours and
+# writes checkpoint.pt at every evaluation, from which a later job continues with --resume.
+# The mixed-precision run exits at the first non-finite loss; the job then reports failure for GPU 0 only.
+name: abstraction-gan-r1
+branch: pipeline
+gpu: true
+kernels:
+  - "{user}/abstraction-features"
+inputs:
+  ART_ZIP: abstract_art.zip
+commands:
+  - nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+  - python -m zipfile -e {ART_ZIP} datasets/
+  - >-
+    (set -e; export CUDA_VISIBLE_DEVICES=0;
+    python methods/gan/train_gan.py --seed 0 --channels 64 --steps 150000 --no-spectral-norm --r1 10 --amp --tag r1amp --hours 6;
+    ) > runs/gpu0.log 2>&1 & p0=$!;
+    (set -e; export CUDA_VISIBLE_DEVICES=1;
+    python methods/gan/train_gan.py --seed 0 --channels 64 --steps 150000 --no-spectral-norm --r1 10 --tag r1 --hours 6;
+    ) > runs/gpu1.log 2>&1 & p1=$!;
+    wait $p0; r0=$?; wait $p1; r1=$?;
+    tail -n 2 runs/gpu0.log runs/gpu1.log;
+    echo "return codes: gpu0 $r0, gpu1 $r1";
+    exit $r1

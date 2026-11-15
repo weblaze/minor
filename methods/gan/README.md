@@ -14,6 +14,8 @@ Phase 2 replaces the VAE generator of phase 1 by an adversarial generator and la
 - Objective: hinge loss.
 - Differentiable augmentation (colour, translation, cutout) of real and generated images before the discriminator, for training on a few thousand images.
 - An exponential moving average of the generator weights is saved and evaluated.
+- `--amp` runs the forward passes in mixed precision; steps with the R1 penalty stay in float32. Not validated by a full run; the run exits at the first non-finite loss. A GTX 1650 returns non-finite values in float16, so the option cannot be checked on that card.
+- Every evaluation writes `checkpoint.pt` (generator, discriminator, averaged generator, both optimisers, step); `--resume <checkpoint.pt>` continues from it in a new run directory.
 
 The latent has the same form as the Q1 VAE latent (128-d vector), so the Q1 bridge can address it without a change of its output dimension.
 
@@ -31,4 +33,4 @@ The run stops at `gan.steps` or after `--hours`. The checkpoint `generator.pt` h
 
 - Unconditional; no bridge uses it yet.
 - No mode-coverage measure beyond the Frechet and kernel distances.
-- Architecture and hyperparameters are first settings.
+- Architecture and hyperparameters are first settings. Results so far (`docs/run_log.md`, 2026-11-16): the R1 variant reaches FD 682.0 at 13651 steps and is under-trained; the spectral-normalisation variant does not train (FD about 1500). Step time on a T4 in float32: 2.1 s at base_channels 64, batch 64.

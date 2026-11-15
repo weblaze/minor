@@ -154,6 +154,10 @@ def main():
     parser.add_argument("--no-spectral-norm", action="store_true", help="discriminator without spectral normalisation")
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--eval-every", type=int, default=None)
+    parser.add_argument("--amp", action="store_true",
+                        help="mixed precision (float16) for the forward passes; the R1 penalty steps stay in float32")
+    parser.add_argument("--resume", default=None,
+                        help="checkpoint.pt of an earlier run; continues from its step with its networks and optimisers")
     parser.add_argument("--smoke", action="store_true",
                         help="synthetic images, randomly initialised DINOv2, few steps; checks the code path only")
     args = parser.parse_args()
@@ -179,7 +183,7 @@ def main():
     n_eval = 64 if args.smoke else hp["n_eval_samples"]
     device = torch.device(config["system"]["device"] if torch.cuda.is_available() else "cpu")
     set_seed(seed)
-    config["run"] = {"steps": steps, "hours": args.hours}
+    config["run"] = {"steps": steps, "hours": args.hours, "amp": args.amp, "resume": args.resume}
     log = RunLog(config["paths"]["runs_dir"], "gan" + ("_smoke" if args.smoke else ""), config, seed)
 
     size = config["image_size"]
@@ -209,6 +213,16 @@ def main():
                                 "discriminator_parameters": sum(p.numel() for p in discriminator.parameters())})
     fixed = torch.randn(64, hp["latent_dim"], generator=torch.Generator().manual_seed(seed)).to(device)
     policy = hp["augment"]
+    amp = args.amp and device.type == "cuda"
+    scaler_d, scaler_g = torch.amp.GradScaler(enabled=amp), torch.amp.GradScaler(enabled=amp)
+    parts = {"generator": generator, "discriminator": discriminator, "average": average, "opt_g": opt_g,
+             "opt_d": opt_d, "scaler_g": scaler_g, "scaler_d": scaler_d}
+    first_step = 0
+    if args.resume:
+        state = torch.load(args.resume, map_location=device, weights_only=True)
+        for name, part in parts.items():
+            part.load_state_dict(state[name])
+        first_step = state["step"]
 
     def evaluate(step):
         g = torch.Generator().manual_seed(1000 + seed)
@@ -223,8 +237,10 @@ def main():
             save_image(average(fixed) * 0.5 + 0.5, log.dir / f"samples_{step:06d}.png", nrow=8)
         torch.save({"model": average.state_dict(), "latent_dim": hp["latent_dim"],
                     "base_channels": hp["base_channels"], "step": step, "seed": seed}, log.dir / "generator.pt")
+        torch.save({**{name: part.state_dict() for name, part in parts.items()}, "step": step},
+                   log.dir / "checkpoint.pt")
 
-    start, step, done = time.time(), 0, False
+    start, step, done = time.time(), first_step, False
     r1_every = hp["r1_every"]
     while not done:
         for index in torch.randperm(len(images), device=device).split(hp["batch_size"]):
@@ -234,24 +250,32 @@ def main():
             flip = torch.rand(len(real), device=device) < 0.5
             real = torch.where(flip.view(-1, 1, 1, 1), real.flip(3), real)
             z = torch.randn(len(real), hp["latent_dim"], device=device)
-            fake = generator(z)
-            real_in = augment(real, policy)
             penalise = hp["r1_weight"] > 0 and step % r1_every == 0
+            with torch.autocast(device.type, enabled=amp):
+                fake = generator(z)
+            real_in = augment(real, policy)
             if penalise:
                 real_in.requires_grad_(True)
-            d_real, d_fake = discriminator(real_in), discriminator(augment(fake.detach(), policy))
-            loss_d = F.relu(1 - d_real).mean() + F.relu(1 + d_fake).mean()
+            with torch.autocast(device.type, enabled=amp and not penalise):
+                d_real = discriminator(real_in)
+                d_fake = discriminator(augment(fake.detach().float(), policy))
+                loss_d = F.relu(1 - d_real.float()).mean() + F.relu(1 + d_fake.float()).mean()
             if penalise:
                 grad = torch.autograd.grad(d_real.sum(), real_in, create_graph=True)[0]
                 loss_d = loss_d + 0.5 * hp["r1_weight"] * r1_every * grad.pow(2).sum(dim=(1, 2, 3)).mean()
             opt_d.zero_grad(set_to_none=True)
-            loss_d.backward()
-            opt_d.step()
+            scaler_d.scale(loss_d).backward()
+            scaler_d.step(opt_d)
+            scaler_d.update()
 
-            loss_g = -discriminator(augment(fake, policy)).mean()
+            with torch.autocast(device.type, enabled=amp):
+                loss_g = -discriminator(augment(fake.float(), policy)).float().mean()
             opt_g.zero_grad(set_to_none=True)
-            loss_g.backward()
-            opt_g.step()
+            scaler_g.scale(loss_g).backward()
+            scaler_g.step(opt_g)
+            scaler_g.update()
+            if not (torch.isfinite(loss_d) and torch.isfinite(loss_g)):
+                raise SystemExit(f"non-finite loss at step {step}: loss_d {loss_d.item()}, loss_g {loss_g.item()}")
             with torch.no_grad():
                 decay = min(hp["ema"], (1 + step) / (10 + step))
                 for a, p in zip(average.parameters(), generator.parameters()):
