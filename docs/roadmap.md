@@ -56,6 +56,8 @@ B-time is applied to all methods available at that point. D-human and D-complexi
 
 D-vote, D-ease, D-loss and D-S4 are applied wherever they are expected to give usable data. D-S4 requires an S4 model and is available from phase 2.
 
+From 2026-11-16 the working branch is `pipeline`: all methods (S1, Q1, F1, G-GAN) in one tree with the shared front matter of `abstraction/pipeline/` (see `docs/pipeline.md` on that branch). The method branches are kept as they are. Code replaced by the shared pipeline is kept under `methods/<method>/legacy/`.
+
 Every evaluated run is collected by `scripts/results.py` into `docs/results.md` and `docs/results.csv`; `scripts/smoke.py` runs the smoke pipeline of every method on a branch. On branch `pipeline`, where all methods share one tree, `scripts/regression.py` checks that a code change leaves the numbers of those smoke runs unchanged, and `docs/pipeline.md` describes how bridges, generators and evaluations are added.
 
 ## After all methods
