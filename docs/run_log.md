@@ -884,3 +884,35 @@ Result:
 - F1 untrained mapper on the mean code gave 0.036 in this rerun; no logged value exists for that setting (the logged 0.066 is for the standardised code), and the other encoders were not run on it.
 
 Limitations: one seed for S1 and F1; MAE feature pooling was not varied (CLS token or a normalised layer could behave differently).
+
+## 2026-11-15 — G-GAN, first run (Kaggle): failed, discriminator did not train
+
+- Code: `g-gan` e6b3d5a, `methods/gan/train_gan.py`; job `abstraction-gan-art`; runs `gan_ch64_seed0_20261114T112652Z`, `gan_ch96_seed0_20261114T112652Z`. Two T4 GPUs, 9 h each.
+- Setting: plain convolutional generator and discriminator (no residual connections), spectral normalisation on every discriminator layer, hinge loss, differentiable augmentation, batch 64, learning rate 2e-4.
+- Reference Frechet distances (DINOv2 features, 595 test paintings): training art 113.3, Q1 VAE reconstructions 208.5, Q1 VAE prior samples 974.7.
+
+| Width | Steps reached | Step time | FD by evaluation step | Last FD | Last kernel distance |
+|---|---|---|---|---|---|
+| 64 | 30575 | 1.06 s | 1468, 1334, 1226, 1123, 1049, 979 (steps 5000 to 30000) | 1094 | 43.3 |
+| 96 | 13128 | 2.47 s | 1338, 973 (steps 5000, 10000) | 1387 | 51.3 |
+
+- Discriminator loss stayed at 2.00 for the whole run at width 64 and until step 11000 at width 96; mean discriminator output on real and on generated images was equal and between 0.003 and 0.05. Under the hinge loss this means the discriminator did not separate the two sets on average, at an output scale far below the margin of 1.
+- Samples: few distinct patterns (dark blobs, grid textures), near-greyscale; mode collapse.
+- The last evaluation of each run is worse than the one before it (979 to 1094; 973 to 1387).
+- Step time was set by image decoding in the data loader (one process, no workers), not by the GPU.
+
+Conclusion: the run measures the first settings, not the adversarial generator as a method.
+
+## 2026-11-15 — G-GAN, second version: local check, second Kaggle run launched
+
+- Code: `g-gan` 0c558e9. Changes: residual blocks in generator and discriminator (sum pooling in the discriminator); spectral normalisation or an R1 penalty (every 16 steps) as alternatives; training images held on the device, flip on the device.
+- Local check (GTX 1650, width 32, batch 32, 3000 steps, 2000 samples; runs `gan_localA_sn_*`, `gan_localB_r1_*`; step time 0.5 s with a second process on the machine):
+
+| Regulariser | FD at 1500 | FD at 3000 | Kernel distance at 3000 |
+|---|---|---|---|
+| spectral normalisation | 1972 | 1506 | 77.8 |
+| R1 penalty 10, no spectral normalisation | 1863 | 1583 | 96.1 |
+
+- Samples of both at step 3000 are varied in colour and layout, with checkerboard artefacts; no collapse to a few patterns. FD falls by about 300 to 450 per 1500 steps at this stage. The first version needed 5000 steps at width 64 to reach 1468.
+- With spectral normalisation the mean discriminator outputs on real and generated images are again equal (loss 2.00) while FD falls; equal means are therefore not by themselves a sign of failure. In the first version the output scale was below 0.05; here it is 0.07 to 0.28.
+- Launched: `abstraction-gan-art` version 2, width 64, batch 64, GPU 0 spectral normalisation (`--tag sn`), GPU 1 R1 penalty 10 (`--tag r1`), 150000 steps or 8 h. Results to follow.
