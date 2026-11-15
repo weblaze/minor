@@ -916,3 +916,20 @@ Conclusion: the run measures the first settings, not the adversarial generator a
 - Samples of both at step 3000 are varied in colour and layout, with checkerboard artefacts; no collapse to a few patterns. FD falls by about 300 to 450 per 1500 steps at this stage. The first version needed 5000 steps at width 64 to reach 1468.
 - With spectral normalisation the mean discriminator outputs on real and generated images are again equal (loss 2.00) while FD falls; equal means are therefore not by themselves a sign of failure. In the first version the output scale was below 0.05; here it is 0.07 to 0.28.
 - Launched: `abstraction-gan-art` version 2, width 64, batch 64, GPU 0 spectral normalisation (`--tag sn`), GPU 1 R1 penalty 10 (`--tag r1`), 150000 steps or 8 h. Results to follow.
+
+## 2026-11-16 — G-GAN, second version (Kaggle): R1 penalty trains, spectral normalisation does not
+
+- Code: `g-gan` 0c558e9, `methods/gan/train_gan.py`; job `abstraction-gan-art` version 2; runs `gan_sn_seed0_20261115T061651Z` (GPU 0, spectral normalisation), `gan_r1_seed0_20261115T061651Z` (GPU 1, R1 penalty 10 every 16 steps, no spectral normalisation). Width 64, batch 64, seed 0, limit 150000 steps or 8 h. Output: `runs/kaggle/abstraction-gan-art/runs/`.
+- Both runs stopped at the time limit. Step time 2.11 s on a T4 for both; 9 % of the configured steps were reached. The cause of the step time is not established (the local check at width 32, batch 32 ran at 0.5 s per step on a GTX 1650).
+- Reference Frechet distances (DINOv2 features, 595 test paintings): training art 113.3, Q1 VAE reconstructions 208.5, Q1 VAE prior samples 974.7 (lowest prior value of the KL sweep 685.2), first G-GAN run 1094 and 1387.
+
+| Regulariser | Steps reached | FD at 5000 | FD at 10000 | Last FD (step) | Kernel distance at 5000 / 10000 / last |
+|---|---|---|---|---|---|
+| R1 penalty 10 | 13651 | 940.7 | 787.0 | 682.0 (13651) | 28.5 / 21.5 / 16.3 |
+| spectral normalisation | 13714 | 1527.5 | 1575.2 | 1472.3 (13714) | 112.6 / 121.2 / 96.8 |
+
+- R1: FD falls at every evaluation and had not levelled off when the run stopped (about 150 per 5000 steps at the end). Discriminator outputs separate real from generated images from step 5000 (`d_real` - `d_fake` 0.07 at step 5000, 0.53 at step 10000, 0.21 at step 13600). Samples at step 13651: dark shapes on light ground, scribble textures, vertical stripes, yellow and orange fields; a share of near-uniform light tiles; residual grid artefacts; muted colour range.
+- Spectral normalisation: discriminator loss 2.00 and equal mean outputs on real and generated images (0.01 to 0.06) for the whole run; FD stays between 1472 and 1575. Samples: blurred colour patches with checkerboard blocks. The fall of FD seen in the local check at width 32 (1972 to 1506 in 3000 steps) did not continue at width 64.
+- The R1 generator at step 13651 is below the prior samples of every Q1 VAE setting (682.0 against 685.2 to 1261.4) and above the Q1 VAE reconstructions (208.5) and the Q1 mapper outputs (402 to 425).
+
+Conclusion: the R1 variant is the working G-GAN configuration. It is under-trained at 13651 steps; the step time has to be reduced or the run continued before the generator is used in a bridge. One seed.
