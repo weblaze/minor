@@ -113,7 +113,7 @@ Evidence: "2026-11-14 — F1 batch at the end of phase 1: orientation votes, com
 O1. What sets the majority orientation of axis 1? The log shows it is set by the initial weights (same seed, same side under both codes in 44 of 50 cases) and that axis 3 of the mean code, the most skewed audio and art axis, has a stable orientation (92 %); a causal account is not established.
 Evidence: "2026-11-14 — F1 batch at the end of phase 1: orientation votes, combination sweep, reruns (local)", part A.
 
-O2. Does the structure transfer hold under an image encoder not used in training? Only DINOv2 and four pixel-based feature sets have been used.
+O2. Does the structure transfer hold under an image encoder not used in training? Only DINOv2 and four pixel-based feature sets have been used. Partly answered on 2026-11-15: under DINO v1 ViT-B/16 (not used in any loss) trained sets reach r 0.40 to 0.63 against 0.07 to 0.25 for controls, about 55 to 80 % of the DINOv2 value; MAE mean-patch features are close to one-dimensional on this collection and give no evidence. "2026-11-15 — structure under two other image encoders (local, evaluation only)".
 Evidence: results (i1), (i2); `deviations_and_limitations.md`.
 
 O3. Do human observers perceive any correspondence between a track and its image? No human evaluation has been made.
@@ -132,7 +132,7 @@ Evidence: "2026-11-12 — exploratory analysis of the seed-0 outputs (local)", p
 O8. Does a larger or denser real art collection raise painting r as the Gaussian model predicts? Only Gaussian galleries have been enlarged.
 Evidence: "2026-11-14 — F1: what limits the painting output (local, exploratory)".
 
-O9. Do the F1 combination gains survive selection on held-out data? The sweep and the rerun selection scored test tracks.
+O9. Do the F1 combination gains survive selection on held-out data? The sweep and the rerun selection scored test tracks. Answered on 2026-11-15: yes. Selection on validation tracks returns the same leading combinations; validation and test r agree over the 100 combinations at Pearson 0.975 (mean code) and 0.988 (standardised code). "2026-11-15 — F1 combination sweep with selection on the validation tracks (local)".
 Evidence: "2026-11-14 — F1 batch at the end of phase 1: orientation votes, combination sweep, reruns (local)"; `deviations_and_limitations.md`.
 
 O10. Would an image generator conditioned on F1 feature vectors reach a better point on the structure-realism curve than Q1? Not implemented.

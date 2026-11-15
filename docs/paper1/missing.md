@@ -12,9 +12,9 @@
 | Q1 on the gate-passing VAE (0.3) with the mean code | whether the gate override changes the mean-code conclusion | A1 in `deviations_and_limitations.md` |
 | S1 and Q1 on the standardised code at more than one seed | code comparison (results (c1)) | one seed per cell |
 | F1 variants and controls at more than one seed; F1 controls on the mean code | P3 in the findings list | "2026-11-13 — F1 variants and controls, seed 0 (local)" |
-| F1 combination selection on the validation split, then evaluation on test | removes selection on test data | A4 in `deviations_and_limitations.md` |
+| F1 combination selection on the validation split, then evaluation on test | removes selection on test data | A4 in `deviations_and_limitations.md` | done 2026-11-15, "2026-11-15 — F1 combination sweep with selection on the validation tracks (local)" |
 | Controls (`f0`, `shuffled`) for the best combinations | whether the combination gains need the true audio distances | "2026-11-14 — F1 batch at the end of phase 1: orientation votes, combination sweep, reruns (local)" |
-| Evaluation with a second image encoder (text-free) | independence of the structure measurement | roadmap: E-2nd-image, scheduled after all methods |
+| Evaluation with a second image encoder (text-free) | independence of the structure measurement | roadmap: E-2nd-image, scheduled after all methods | partly done 2026-11-15 (DINO v1: r 0.40 to 0.63 for trained sets against 0.07 to 0.25 for controls; MAE features not usable), "2026-11-15 — structure under two other image encoders (local, evaluation only)" |
 | Human evaluation | any perceptual claim | roadmap, phase 1 step 5 |
 
 ## 2. Analyses to move into the repository

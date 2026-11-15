@@ -23,7 +23,7 @@ Every item names its run-log entry by heading. Items marked "from code" are read
 
 ### A4. Model selection on the test split (F1)
 
-- The F1 grid and the combination sweep score every configuration on the 789 test tracks. The rerun selection (top five by r of the painting output, at least 300 distinct paintings, FD at most 450) uses these test scores; the reruns (seeds 1 to 4) are evaluated on the same test tracks. The rule was fixed in `phase1_batch.py` before the sweep ran, but it selects on test data. "2026-11-14 — F1 batch at the end of phase 1: orientation votes, combination sweep, reruns (local)"; from code: `methods/f1/realism.py`, `methods/f1/phase1_batch.py`.
+- The F1 grid and the combination sweep score every configuration on the 789 test tracks. The rerun selection (top five by r of the painting output, at least 300 distinct paintings, FD at most 450) uses these test scores; the reruns (seeds 1 to 4) are evaluated on the same test tracks. The rule was fixed in `phase1_batch.py` before the sweep ran, but it selects on test data. "2026-11-14 — F1 batch at the end of phase 1: orientation votes, combination sweep, reruns (local)"; from code: `methods/f1/realism.py`, `methods/f1/phase1_batch.py`. Resolved on 2026-11-15: the sweep was repeated with selection on the validation tracks; the same leading combinations are selected and their five-seed test values are unchanged (0.747, 0.737 mean code; 0.641 standardised code). "2026-11-15 — F1 combination sweep with selection on the validation tracks (local)".
 - The orientation runs report validation-split distribution terms; r of the painting output is on test tracks. "2026-11-13 — F1 orientation across ten seeds (local)".
 
 ### A5. Runs from uncommitted or later-committed code
