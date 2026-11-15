@@ -1,0 +1,23 @@
+# G-GAN on the training split of the art collection, base_channels 64.
+# GPU 0: spectral normalisation. GPU 1: no spectral normalisation, R1 penalty 10.
+# Each run stops at 150000 steps or after 8 hours.
+name: abstraction-gan-art
+branch: g-gan
+gpu: true
+kernels:
+  - "{user}/abstraction-features"
+inputs:
+  ART_ZIP: abstract_art.zip
+commands:
+  - nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+  - python -m zipfile -e {ART_ZIP} datasets/
+  - >-
+    (set -e; export CUDA_VISIBLE_DEVICES=0;
+    python methods/gan/train_gan.py --seed 0 --channels 64 --steps 150000 --tag sn --hours 8;
+    ) > runs/gpu0.log 2>&1 & p0=$!;
+    (set -e; export CUDA_VISIBLE_DEVICES=1;
+    python methods/gan/train_gan.py --seed 0 --channels 64 --steps 150000 --no-spectral-norm --r1 10 --tag r1 --hours 8;
+    ) > runs/gpu1.log 2>&1 & p1=$!;
+    wait $p0; r0=$?; wait $p1; r1=$?;
+    tail -n 2 runs/gpu0.log runs/gpu1.log;
+    exit $((r0 + r1))
