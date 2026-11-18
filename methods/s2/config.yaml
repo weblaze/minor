@@ -1,0 +1,21 @@
+# S2. Blind matching of the audio space and the art space by shape (Gromov-Wasserstein); nothing is trained.
+# None of these values has been validated.
+audio_code:
+  variant: "mean"           # mean | standardised | whitened
+  whiten_dim: 128
+  layers: null
+
+match:
+  codes: ["mean", "standardised"]
+  epsilon: 0.0005           # final entropic regularisation, in units of the mean distance
+  epsilon_start: 0.05       # first value; multiplied by epsilon_decay per step down to epsilon
+  epsilon_decay: 0.95
+  outer: 300                # linearisation steps
+  inner: 200                # Sinkhorn iterations per step
+  restarts: 10              # random initial couplings; the lowest objective is reported as the match
+  n_null: 5                 # draws of each reference space
+  null_restarts: 2          # restarts per reference draw
+
+eval:
+  knn_k: 10
+  n_permutations: 9999
