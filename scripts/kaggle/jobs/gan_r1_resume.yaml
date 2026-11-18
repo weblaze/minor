@@ -1,0 +1,17 @@
+# Continues the mixed-precision R1 run of abstraction-gan-r1 (gan_r1amp_seed0_20261115T203214Z, step 29264)
+# from its checkpoint.pt, on one GPU, until 150000 steps or the time limit. Same flags as the original run.
+name: abstraction-gan-r1-resume
+branch: pipeline
+gpu: true
+kernels:
+  - "{user}/abstraction-features"
+  - "{user}/abstraction-gan-r1"
+inputs:
+  ART_ZIP: abstract_art.zip
+  PREVIOUS: gan_r1amp_seed0_20261115T203214Z
+commands:
+  - nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+  - python -m zipfile -e {ART_ZIP} datasets/
+  - >-
+    CUDA_VISIBLE_DEVICES=0 python methods/gan/train_gan.py --seed 0 --channels 64 --steps 150000
+    --no-spectral-norm --r1 10 --amp --tag r1amp --hours 5.5 --resume {PREVIOUS}/checkpoint.pt

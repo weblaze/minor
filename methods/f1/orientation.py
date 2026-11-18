@@ -60,6 +60,8 @@ def main():
     parser.add_argument("--first-seed", type=int, default=0)
     parser.add_argument("--hidden", type=int, default=None, help="width of the mapping network")
     parser.add_argument("--depth", type=int, default=None, help="number of blocks of the mapping network")
+    parser.add_argument("--save-assignments", action="store_true",
+                        help="write assignments_<config>.npz: test track ids and the painting of each track per seed")
     args = parser.parse_args()
     config, device = setup(args)
     if args.hidden:
@@ -71,8 +73,8 @@ def main():
     config["run"] = {"steps": steps, "configs": args.configs, "seeds": args.seeds}
     log = RunLog(config["paths"]["runs_dir"], run_name("orientation", args.smoke), config, 0)
 
-    _, layers, splits = load_layers(config, args.smoke)
-    _, art, art_splits = load_art(config, device, args.smoke)
+    track_ids, layers, splits = load_layers(config, args.smoke)
+    art_names, art, art_splits = load_art(config, device, args.smoke)
     gallery_np, val_art = art[art_splits == "train"], art[art_splits == "val"]
     gallery = torch.from_numpy(gallery_np).to(device)
     code = config["audio_code"]
@@ -128,6 +130,10 @@ def main():
             "painting_similarity_same_orientation": float(np.mean(same_sign)) if same_sign else None,
             "painting_similarity_shuffled": float((unit[picks[0]] * unit[rng.permutation(picks[1])]).sum(1).mean())}
         log.save_json("results.json", results)
+        if args.save_assignments:
+            np.savez(log.dir / f"assignments_{name}.npz", track_ids=track_ids[splits == "test"],
+                     seeds=np.array([row["seed"] for row in rows]),
+                     painting_names=art_names[art_splits == "train"][np.stack(picks)])
         print(f"== {name} ({code['variant']} code)")
         print("seed | corr axis 1, 2, 3 | r painting | val swd | val energy | val struct | distinct")
         for row in rows:
