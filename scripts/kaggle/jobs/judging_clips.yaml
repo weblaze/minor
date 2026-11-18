@@ -1,0 +1,13 @@
+# Clips for the phase 1 judging page: 10 s from the middle of each track in scripts/judging/tracks.txt.
+# CPU only. Output: clips/<track id>.mp3
+name: abstraction-judging-clips
+branch: pipeline
+gpu: false
+datasets:
+  - imsparsh/fma-free-music-archive-small-medium
+kernels: []
+inputs:
+  FMA: fma_small
+commands:
+  - ffmpeg -version | head -1
+  - python scripts/judging/clips.py --source {FMA} --out /kaggle/working/clips

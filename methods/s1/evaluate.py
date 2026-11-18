@@ -44,6 +44,8 @@ def main():
     parser.add_argument("--mapper", default=None)
     parser.add_argument("--genres", default=None)
     parser.add_argument("--permutations", type=int, default=None)
+    parser.add_argument("--save-images", action="store_true",
+                        help="write the image of every test track to images/<track id>.png in the run directory")
     args = parser.parse_args()
     config, device = setup(args)
     seed = config["system"]["seed"]
@@ -77,6 +79,10 @@ def main():
             batch = torch.from_numpy(codes[start:start + 64]).to(device)
             images, _ = generate(mapper, generator, batch, code_mean, code_std)
             features.append(dino(images).float().cpu())
+            if args.save_images:
+                (log.dir / "images").mkdir(exist_ok=True)
+                for offset, image in enumerate(images.cpu()):
+                    save_image(image * 0.5 + 0.5, log.dir / "images" / f"{track_ids[start + offset]}.png")
             if first_images is None:
                 first_images = images.cpu()
     features = torch.cat(features).numpy()
