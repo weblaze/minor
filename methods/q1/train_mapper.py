@@ -35,7 +35,7 @@ import math
 import torch
 
 from abstraction.data.codes import apply_code_transform, fit_code_transform, transform_to_state
-from abstraction.generators import load_generator
+from abstraction.generators import GENERATORS, load_generator
 from abstraction.losses.distribution import sliced_wasserstein
 from abstraction.losses.structure import distance_correlation_loss, neighbour_kl_loss, pairwise_distances
 from abstraction.pipeline.cli import setup
@@ -70,8 +70,8 @@ def main():
     weights.update(VARIANTS[args.variant])
     shuffle = args.variant == "shuffled"
 
-    gate = gate_passed(args.vae)
-    if gate is not True and not args.ignore_gate:
+    gate = gate_passed(args.vae) if GENERATORS[args.generator].has_encoder else "not applicable"
+    if gate not in (True, "not applicable") and not args.ignore_gate:
         state = "missing" if gate is None else "failed"
         raise SystemExit(f"gate.json next to {args.vae} is {state}; run gate.py or pass --ignore-gate")
     set_seed(seed)
@@ -93,7 +93,11 @@ def main():
     art = {}
     for split in ("train", "val"):
         dataset = art_dataset(config, split, False, args.smoke)
-        mu, logvar = encode_images(image_generator, dataset, device)
+        if image_generator.has_encoder:
+            mu, logvar = encode_images(image_generator, dataset, device)
+        else:
+            mu = torch.zeros(len(dataset), math.prod(image_generator.latent_shape))
+            logvar = torch.zeros_like(mu)
         art[split] = (mu.to(device), logvar.to(device), features_of_dataset(dino, dataset, device).to(device))
 
     mapper = build_mapper(config, train_codes.shape[-1], image_generator).to(device)

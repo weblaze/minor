@@ -91,8 +91,9 @@ def main():
     test_art = features_of_dataset(dino, art_dataset(config, "test", False, args.smoke), device).numpy()
     train_set = art_dataset(config, "train", False, args.smoke)
     train_art = features_of_dataset(dino, train_set, device).numpy()
-    recon_art = features_of_dataset(dino, train_set, device,
-                                    transform=lambda x: generator.decode(generator.encode(x)[0])).numpy()
+    recon_art = (features_of_dataset(dino, train_set, device,
+                                     transform=lambda x: generator.decode(generator.encode(x)[0])).numpy()
+                 if generator.has_encoder else None)
 
     def against_test_art(x):
         scores = distribution_scores(x, test_art, seed)
@@ -102,13 +103,14 @@ def main():
         "n_test_art": len(test_art),
         "generated": against_test_art(features),
         "reference_train_art": against_test_art(train_art),
-        "reference_vae_reconstructions": against_test_art(recon_art),
         "mean_pairwise_distance_generated": mean_pairwise_distance(features),
         "mean_pairwise_distance_test_art": mean_pairwise_distance(test_art),
         "participation_ratio_generated": participation_ratio(features),
         "participation_ratio_test_art": participation_ratio(test_art),
         "participation_ratio_audio": participation_ratio(codes),
     }
+    if recon_art is not None:
+        results["image_distribution"]["reference_vae_reconstructions"] = against_test_art(recon_art)
     if args.genres:
         results["genre_leakage"] = genre_leakage(track_ids, features, codes, args.genres)
 

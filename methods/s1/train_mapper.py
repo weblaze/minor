@@ -75,8 +75,14 @@ def main():
     code_mean = train_codes.mean(dim=(0, 1))
     code_std = train_codes.std(dim=(0, 1)) + 1e-6
 
-    real = encode_images(generator, art_dataset(config, "train", False, args.smoke), device) / latent_std
-    real_val = encode_images(generator, art_dataset(config, "val", False, args.smoke), device) / latent_std
+    train_art, val_art = art_dataset(config, "train", False, args.smoke), art_dataset(config, "val", False, args.smoke)
+    if generator.has_encoder:
+        real = encode_images(generator, train_art, device) / latent_std
+        real_val = encode_images(generator, val_art, device) / latent_std
+    else:
+        prior = torch.Generator().manual_seed(seed)
+        real = generator.prior_sample(len(train_art), prior).flatten(1) / latent_std
+        real_val = generator.prior_sample(len(val_art), prior).flatten(1) / latent_std
     real, real_val = real.to(device), real_val.to(device)
 
     mapper = build_mapper(config, generator).to(device)

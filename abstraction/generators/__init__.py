@@ -4,9 +4,11 @@ A bridge loads its generator with `load_generator(args.generator, args.vae, conf
 `--generator` selects the implementation and `--vae` names the checkpoint.
 """
 from .base import Generator
+from .gan import GANGenerator
 from .vae import SpatialVAEGenerator, VectorVAEGenerator
 
 GENERATORS = {
+    "gan": GANGenerator,
     "spatial_vae": SpatialVAEGenerator,
     "vector_vae": VectorVAEGenerator,
 }
@@ -14,7 +16,8 @@ GENERATORS = {
 
 def add_generator_argument(parser, default):
     parser.add_argument("--generator", choices=sorted(GENERATORS), default=default,
-                        help=f"image generator loaded from --vae (default: {default})")
+                        help=f"image generator loaded from --vae, the checkpoint (default: {default}); "
+                             "gan: generator.pt of methods/gan/train_gan.py")
     return parser
 
 

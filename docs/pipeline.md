@@ -8,7 +8,7 @@ How the code is laid out, how a stage is run, how a new part is added, how an ex
 abstraction/                 shared package (pip install -e .)
   data/codes.py              audio-code transforms over MERT layers: mean, standardised, whitened, layer subsets
   encoders/                  frozen MERT, DINOv2 and CAV-MAE (S4)
-  generators/                image generators behind one interface (phase 2 and later)
+  generators/                image generators behind one interface: spatial_vae (S1), vector_vae (Q1), gan (G-GAN)
   pipeline/                  front matter shared by the methods
     cli.py                   parser (--config --seed --tag --code --smoke), config setup, run names
     data.py                  MERT layers and splits, codes_of, art datasets, synthetic smoke data, window sampling
@@ -27,7 +27,7 @@ A method folder keeps what is specific to the method: its losses and variants, i
 
 S1 keeps its own code transform (`methods/s1/data.py`). Its `standardised` and `whitened` statistics are computed with `numpy.mean`/`numpy.std` in float64, the shared transform with chunked sums of x and x²; the results differ in the last bits, so replacing it would change S1 runs with those codes. Q1 uses the shared transform, which gives bit-identical codes for Q1.
 
-Code replaced by the shared pipeline is not deleted. It is moved unchanged to `methods/<method>/legacy/` with a README naming its replacement; nothing imports it. At present: `methods/q1/legacy/data.py`.
+Code replaced by the shared pipeline is not deleted. It is moved unchanged to `methods/<method>/legacy/` with a README naming its replacement; nothing imports it. At present: `methods/q1/legacy/data.py`, `methods/gan/legacy/train_gan.py`.
 
 ## Front door
 
@@ -78,7 +78,14 @@ A generator implements `abstraction.generators.base.Generator`:
 
 Register the class in `GENERATORS` in `abstraction/generators/__init__.py`; it then appears as a `--generator` choice of the S1 and Q1 stages. The bridges call only these members.
 
-What `encode` is used for: S1 `L_dist` compares mapped latents with latents of real art, Q1 `L_lat` with samples of their posteriors, the evaluation scripts report VAE reconstructions as a reference, and the Q1 gate decodes posterior means. A generator without an encoder (a GAN, most diffusion decoders) raises `NotImplementedError` there. Using such a generator with S1 or Q1 therefore requires a decision about what replaces the real latents (for example samples of the generator's prior), which is a change of method, not of the interface.
+What `encode` is used for: S1 `L_dist` compares mapped latents with latents of real art, Q1 `L_lat` with samples of their posteriors, the evaluation scripts report VAE reconstructions as a reference, and the Q1 gate decodes posterior means.
+
+A generator without an encoder sets `has_encoder = False` (G-GAN; most diffusion decoders). By the decision of 2026-11-18, S1 and Q1 then use samples of the prior N(0, I) (`prior_sample`) where they would use latents of real art: S1 `L_dist` compares mapped latents with prior samples (as many as there are training and validation paintings, fixed by the seed), Q1 `L_lat` with fresh prior samples in each batch (posterior mean 0, log-variance 0). The evaluation scripts omit the reconstruction reference, and Q1 does not require a gate result. `gate.py` and `baselines.py` of Q1 still require an encoder.
+
+```bash
+python scripts/run.py q1 train_mapper --generator gan --vae runs/<gan run>/generator.pt --seed 0
+python scripts/run.py s1 train_mapper --generator gan --vae runs/<gan run>/generator.pt --seed 0
+```
 
 ## Adding an evaluation
 

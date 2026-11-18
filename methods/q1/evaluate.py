@@ -88,13 +88,15 @@ def main():
     test_art = features_of_dataset(dino, art_dataset(config, "test", False, args.smoke), device).numpy()
     train_set = art_dataset(config, "train", False, args.smoke)
     train_art = features_of_dataset(dino, train_set, device).numpy()
-    recon_art = features_of_dataset(dino, train_set, device,
-                                    transform=lambda x: generator.decode(generator.encode(x)[0])).numpy()
+    recon_art = (features_of_dataset(dino, train_set, device,
+                                     transform=lambda x: generator.decode(generator.encode(x)[0])).numpy()
+                 if generator.has_encoder else None)
 
     results = {"variant": variant, "mapper_seed": trained_seed, "code_variant": transform["variant"],
                **full_scores(codes, features, test_art, config["eval"]["knn_k"], n_perm, seed)}
     results["image_distribution"]["reference_train_art"] = distribution_scores(train_art, test_art, seed)
-    results["image_distribution"]["reference_vae_reconstructions"] = distribution_scores(recon_art, test_art, seed)
+    if recon_art is not None:
+        results["image_distribution"]["reference_vae_reconstructions"] = distribution_scores(recon_art, test_art, seed)
     if args.genres:
         results["genre_leakage"] = genre_leakage(track_ids, features, codes, args.genres)
 

@@ -17,6 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNS = ROOT / "runs"
 
 # (script, arguments); "{name}" is replaced by the newest runs/<name>*/ directory
+# A script path may leave the method folder ("../q1/..."): the G-GAN pipeline runs the S1 and Q1 bridges
+# with the GAN generator it has just trained.
 PIPELINES = {
     "s1": [("train_vae.py", []),
            ("train_mapper.py", ["--vae", "{s1_vae_smoke}/vae.pt"]),
@@ -35,7 +37,13 @@ PIPELINES = {
            ("realism.py", ["--only", "swd", "soft_0.02_swd"]),
            ("orientation.py", ["--seeds", "2"])],
     "s2": [("match.py", [])],
-    "gan": [("train_gan.py", ["--no-spectral-norm", "--r1", "10"])],
+    "gan": [("train_gan.py", ["--no-spectral-norm", "--r1", "10"]),
+            ("../s1/train_mapper.py", ["--generator", "gan", "--vae", "{gan_smoke}/generator.pt"]),
+            ("../s1/evaluate.py", ["--generator", "gan", "--vae", "{gan_smoke}/generator.pt",
+                                   "--mapper", "{s1_mapper_s1_smoke}/mapper.pt"]),
+            ("../q1/train_mapper.py", ["--generator", "gan", "--vae", "{gan_smoke}/generator.pt"]),
+            ("../q1/evaluate.py", ["--generator", "gan", "--vae", "{gan_smoke}/generator.pt",
+                                   "--mapper", "{q1_mapper_q1_smoke}/mapper.pt"])],
     "s4": [("extract.py", []),
            ("probe.py", ["--embeddings", "{s4_extract_smoke}/embeddings"])],
 }
