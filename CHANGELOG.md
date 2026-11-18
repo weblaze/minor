@@ -6,6 +6,9 @@ Versioning scheme: `vX.Y.Z` — `X` = approach being delivered (v1 = approach 01
 
 ## [Unreleased]
 
+### Changed
+- README: phase table, progress since 2026-11-14 (pipeline branch, G-GAN, S2, S4, judging page), documentation of the `pipeline` branch
+
 ## [0.4.1] - 2026-11-13
 
 ### Added

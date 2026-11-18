@@ -7,11 +7,17 @@ Research code for music-to-abstract-image generation under two constraints:
 
 ## Status
 
-The `main` branch holds the cleaned code base and no trained model. Methods are developed on the branches listed under "Work in progress". Every run on real data is recorded in [docs/run_log.md on `base`](https://github.com/weblaze/minor/blob/base/docs/run_log.md), including runs with negative outcomes.
+The `main` branch holds the cleaned code base and no trained model. Since 2026-11-16 all methods are developed together on the branch [`pipeline`](https://github.com/weblaze/minor/tree/pipeline) (see "Work in progress"). Every run on real data is recorded in [docs/run_log.md on `base`](https://github.com/weblaze/minor/blob/base/docs/run_log.md), including runs with negative outcomes.
 
-Data in use: FMA-small (music) and abstract paintings from four WikiArt styles. Encoders: MERT-v1-95M (audio) and DINOv2 ViT-S/14 (image), both frozen and both trained without text.
+Data in use: FMA-small (music) and abstract paintings from four WikiArt styles. Encoders: MERT-v1-95M (audio) and DINOv2 ViT-S/14 (image), both frozen and both trained without text. From phase 2 also CAV-MAE-Scale++, an audio-visual model pretrained on video without text or labels.
 
-Progress as of 2026-11-14:
+| Phase | State on 2026-11-19 |
+|---|---|
+| 1: structure transfer with a VAE (S0, S1, Q1, F1, S2) | S0, S1, Q1 and F1 run and evaluated; S2 built and running; a paper draft exists; human judging page built |
+| 2: S4, then S3, with G-GAN and then diffusion | G-GAN trained in three runs and still improving; S4 probe run; the GAN can paint for S1 and Q1; S3 and diffusion not started |
+| 2.5 and 3 | not started |
+
+Progress of phase 1 (as of 2026-11-14):
 
 - Feature extraction, training and evaluation run end to end on free GPU sessions through a job runner (`scripts/kaggle/`).
 - S1 and Q1 have been trained and evaluated on held-out tracks for one seed, with their controls (no structure term, shuffled audio distances, untrained mapping) and two non-learned baselines.
@@ -21,7 +27,16 @@ Progress as of 2026-11-14:
 - With real paintings, the leading contrast of the audio representation is mapped to the leading contrast of the art collection in every seed; the orientation of that correspondence and all finer detail are not determined by distance matching alone.
 - Retrieval of real paintings is limited by the sparsity of a finite collection; structure and closeness to the art distribution trade off along one curve, on which the generated-image results also lie.
 
-Q1 on the mean code has three seeds and the F1 retrieval results have five to fifty; all other results are from a single seed. No human evaluation has been made. The results are preliminary and are not reported here as findings.
+Progress since 2026-11-14:
+
+- The methods were merged into one tree with a shared front end (`abstraction/pipeline/`), a single entry point (`scripts/run.py`), smoke pipelines and a numerical regression check that every refactoring must pass with zero changed values. Code replaced by the shared front end is kept in `legacy/` folders.
+- G-GAN, an unconditional image generator trained on the art collection, went through three runs. The first collapsed; with an R1 penalty and a residual architecture the second learns, and with mixed precision the third trains about three times faster. Its distance to real art (Frechet distance on DINOv2 features) is below that of the prior samples of every VAE and still falls; it is not yet as close as the VAE reconstructions.
+- A GAN has no encoder. S1 and Q1 now accept it as the painter and then compare their mapped latents with samples of the GAN input distribution instead of latents of real paintings.
+- S4 probe: CAV-MAE embeds all tracks and paintings. It orders tracks partly as MERT does and paintings largely as DINOv2 does, and its sound-image similarity has a part that is specific to the pair and stable across windows of a track. Used directly to pick a painting per track, it carries little of the distance structure of the music. The same similarity scores the two orientations of a mapping (D-S4).
+- S2 matches the shape of the music collection to the shape of the art collection with Gromov-Wasserstein, without pairs and without training, and scores the resulting assignment like F1.
+- A judging page for the human pilot of phase 1 is built: judges hear a clip and pick the picture that fits it, and pair clips and pictures by similarity.
+
+Q1 on the mean code has three seeds and the F1 retrieval results have five to fifty; all other results are from a single seed. No human evaluation has been made yet. The results are preliminary and are not reported here as findings.
 
 ## How the system works
 
@@ -30,8 +45,10 @@ audio track -> middle 30 s -> three windows of 10 s
             -> MERT-v1-95M (frozen, trained without text) -> 13 layers x 768 values per window
             -> audio code (mean, standardised or whitened combination of the layers)
 audio code  -> mapping network (the only trained part of a bridge)
-            -> image latent  -> generator -> image            (S1, Q1)
-            -> image feature -> nearest real painting         (F1)
+            -> image latent  -> generator (VAE or GAN) -> image   (S1, Q1)
+            -> image feature -> nearest real painting             (F1)
+audio codes + art features -> shape matching, no training -> painting per track   (S2)
+audio track + painting -> CAV-MAE (frozen, pretrained on video) -> similarity      (S4)
 image       -> DINOv2 ViT-S/14 (frozen, trained without text) -> feature used for training and evaluation
 ```
 
@@ -61,6 +78,10 @@ Human judging closes each phase. The full plan and the meaning of every identifi
 | [methods/s1/README.md](https://github.com/weblaze/minor/blob/s1-structure/methods/s1/README.md) | `s1-structure` | S1: method, variants, hypotheses, protocol |
 | [methods/q1/README.md](https://github.com/weblaze/minor/blob/q1-structure/methods/q1/README.md) | `q1-structure` | Q1: method, diagnostics, gate, baselines, protocol |
 | [methods/f1/README.md](https://github.com/weblaze/minor/blob/f1-feature/methods/f1/README.md) | `f1-feature` | F1: method, staged diagnosis, experiment grid |
+| [docs/pipeline.md](https://github.com/weblaze/minor/blob/pipeline/docs/pipeline.md) | `pipeline` | Code layout, running a stage, adding an audio code, bridge, generator or evaluation, Kaggle jobs, regression check |
+| [methods/gan/README.md](https://github.com/weblaze/minor/blob/pipeline/methods/gan/README.md) | `pipeline` | G-GAN: architecture, regularisers, training |
+| [methods/s2/README.md](https://github.com/weblaze/minor/blob/pipeline/methods/s2/README.md) | `pipeline` | S2: blind matching by Gromov-Wasserstein |
+| [methods/s4/README.md](https://github.com/weblaze/minor/blob/pipeline/methods/s4/README.md) | `pipeline` | S4: CAV-MAE probe and the D-S4 orientation test |
 | [scripts/kaggle/README.md](https://github.com/weblaze/minor/blob/base/scripts/kaggle/README.md) | `base` | Job runner for free GPU sessions |
 | [CHANGELOG.md](CHANGELOG.md) | `main` | Versions and additions per branch |
 
@@ -68,7 +89,8 @@ Human judging closes each phase. The full plan and the meaning of every identifi
 
 - Every run writes a directory with its configuration, git commit, seed, software versions and metrics.
 - Train, validation and test splits are fixed by a hash of the track identifier or file name.
-- `python scripts/smoke.py` (branch `base` and method branches) runs each method end to end on synthetic data to verify the code path.
+- `python scripts/smoke.py` runs each method end to end on synthetic data to verify the code path; `python scripts/regression.py --compare <baseline>` (branch `pipeline`) checks that a change leaves every smoke result unchanged.
+- Training and feature extraction run as jobs on free Kaggle GPUs; a job runs the pushed head of its branch and records the commit.
 - `python scripts/results.py table` rebuilds the results table from the run directories; `python scripts/results.py agreement` compares runs on the same tracks.
 - Protocol rules are fixed before runs; where a run departs from them the run log states the deviation.
 
@@ -98,14 +120,16 @@ The model files are untrained scaffolds. They are kept for reuse, not as results
 
 ## Work in progress
 
-Structure-transfer methods are developed on separate branches from a shared base:
+All methods are developed on one branch since 2026-11-16; the earlier method branches are kept as they were:
 
-| Branch | Method |
+| Branch | Content |
 |---|---|
-| `base` | Shared data loading, frozen encoders (MERT, DINOv2), evaluation, logging |
+| `pipeline` | Working branch: every method below plus S2, S4 and G-GAN, the shared front end, the judging material |
+| `base` | Shared data loading, frozen encoders (MERT, DINOv2), evaluation, logging; the run log, roadmap and paper draft |
 | `s1-structure` | S1: a mapping trained so that pairwise distances between songs match pairwise distances between generated images |
 | `q1-structure` | Q1: S1 with a vector-latent generator, a feature-space realism term, a local structure term and pre-training diagnostics |
 | `f1-feature` | F1: a mapping from audio codes to DINOv2 image features with nearest-painting retrieval and no image decoder; used to locate where structure is lost |
+| `g-gan` | G-GAN as first developed (merged into `pipeline`) |
 
 ## Versioning
 
