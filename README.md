@@ -13,7 +13,7 @@ Data in use: FMA-small (music) and abstract paintings from four WikiArt styles. 
 
 | Phase | State on 2026-11-19 |
 |---|---|
-| 1: structure transfer with a VAE (S0, S1, Q1, F1, S2) | S0, S1, Q1 and F1 run and evaluated; S2 built and running; a paper draft exists; human judging page built |
+| 1: structure transfer with a VAE (S0, S1, Q1, F1, S2) | S0, S1, Q1, F1 and S2 run and evaluated; a paper draft exists; human judging page built |
 | 2: S4, then S3, with G-GAN and then diffusion | G-GAN trained in three runs and still improving; S4 probe run; the GAN can paint for S1 and Q1; S3 and diffusion not started |
 | 2.5 and 3 | not started |
 
@@ -33,7 +33,8 @@ Progress since 2026-11-14:
 - G-GAN, an unconditional image generator trained on the art collection, went through three runs. The first collapsed; with an R1 penalty and a residual architecture the second learns, and with mixed precision the third trains about three times faster. Its distance to real art (Frechet distance on DINOv2 features) is below that of the prior samples of every VAE and still falls; it is not yet as close as the VAE reconstructions.
 - A GAN has no encoder. S1 and Q1 now accept it as the painter and then compare their mapped latents with samples of the GAN input distribution instead of latents of real paintings.
 - S4 probe: CAV-MAE embeds all tracks and paintings. It orders tracks partly as MERT does and paintings largely as DINOv2 does, and its sound-image similarity has a part that is specific to the pair and stable across windows of a track. Used directly to pick a painting per track, it carries little of the distance structure of the music. The same similarity scores the two orientations of a mapping (D-S4).
-- S2 matches the shape of the music collection to the shape of the art collection with Gromov-Wasserstein, without pairs and without training, and scores the resulting assignment like F1.
+- S2 matches the shape of the music collection to the shape of the art collection with Gromov-Wasserstein, without pairs and without training. On the mean audio code it gives every test track a different real painting and keeps the distance structure of the music more strongly than the trained F1 mappings; it is solved on the test tracks themselves, so it is not yet an out-of-sample result. On the standardised code the music fits a structureless reference cloud better than it fits the art.
+- Orientation: which way round the leading contrast of the music maps onto the art is not fixed by distance matching. Three machine-side judges now agree on it for the leading axis: the majority of fifty randomly initialised F1 mappings, the score of the video-trained model (D-S4), and the S2 shape match.
 - A judging page for the human pilot of phase 1 is built: judges hear a clip and pick the picture that fits it, and pair clips and pictures by similarity.
 
 Q1 on the mean code has three seeds and the F1 retrieval results have five to fifty; all other results are from a single seed. No human evaluation has been made yet. The results are preliminary and are not reported here as findings.
