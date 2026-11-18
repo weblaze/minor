@@ -42,7 +42,7 @@ The following were run from scripts not in the repository. Their scripts must be
 - Standardised-code and other-network-size values of the majority/minority comparison (the log states only that differences are "of the same size or smaller").
 - Confidence intervals or seed standard deviations for every single-seed result.
 - Number of near-duplicate paintings between training and test art (no de-duplication was performed).
-- MERT model revision (commit hash) used for extraction.
+- MERT model revision (commit hash) used for extraction. Resolved 2026-11-18: `12af15f` (run log entry of that date).
 - Wall-clock and GPU-hour totals for the paper's compute statement (partly available from the per-entry durations).
 
 ## 4. Inconsistencies to resolve

@@ -990,3 +990,7 @@ Conclusion: mixed precision is usable for G-GAN and is the setting for further r
 - For comparison, on the same measure (standardised code, seed 0, 2026-11-13 entry): F1 `f1` painting output 0.578, `f0` 0.303, `shuffled` 0.279, untrained random mapping 0.066.
 
 Conclusion: CAV-MAE orders tracks partly as MERT does (r 0.32 to 0.36) and paintings substantially as DINOv2 does (0.56). Its track-painting similarity has a pair-specific part (28 % of the variance) that is a stable property of the track (window agreement 0.81 against 0.005). Used directly as a bridge, that similarity carries little of the MERT distance structure into the paintings (r 0.06 to 0.08). Whether it prefers one orientation of the F1 mappings (D-S4) is tested in a separate entry.
+## 2026-11-18 — MERT model revision of the feature extraction
+
+- The extraction job `abstraction-features` loaded `m-a-p/MERT-v1-95M` at revision `main` (`mert.revision: null` in `configs/base.yaml`) on 2026-11-09. The commit history of the model repository on huggingface.co (checked 2026-11-18) has no commit after 2025-05-25; `main` was therefore commit `12af15fef9d0ac838c3f475bfbbf26d2060dd4f5` ("Update configuration_MERT.py", 2025-05-25) at the time of the extraction. Hidden states were read through forward hooks (`hidden-state route: hooks` in `logs/07.log` of the job).
+- Resolves the item "MERT model revision (commit hash) used for extraction" in `docs/paper1/missing.md`, section 3.
