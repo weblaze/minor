@@ -1,5 +1,8 @@
-# Continues the mixed-precision R1 run of abstraction-gan-r1 (gan_r1amp_seed0_20261115T203214Z, step 29264)
-# from its checkpoint.pt, on one GPU, until 150000 steps or the time limit. Same flags as the original run.
+# GPU 0: continues the mixed-precision R1 run of abstraction-gan-r1 (gan_r1amp_seed0_20261115T203214Z, step 29264)
+# from its checkpoint.pt, with the flags of the original run.
+# GPU 1: the same configuration from step 0 with seed 1, as a seed check.
+# Each run stops at 150000 steps or after 5.5 hours and writes checkpoint.pt at every evaluation.
+# The job reports the return code of GPU 0.
 name: abstraction-gan-r1-resume
 branch: pipeline
 gpu: true
@@ -13,5 +16,13 @@ commands:
   - nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
   - python -m zipfile -e {ART_ZIP} datasets/
   - >-
-    CUDA_VISIBLE_DEVICES=0 python methods/gan/train_gan.py --seed 0 --channels 64 --steps 150000
-    --no-spectral-norm --r1 10 --amp --tag r1amp --hours 5.5 --resume {PREVIOUS}/checkpoint.pt
+    (set -e; export CUDA_VISIBLE_DEVICES=0;
+    python methods/gan/train_gan.py --seed 0 --channels 64 --steps 150000 --no-spectral-norm --r1 10 --amp --tag r1amp --hours 5.5 --resume {PREVIOUS}/checkpoint.pt;
+    ) > runs/gpu0.log 2>&1 & p0=$!;
+    (set -e; export CUDA_VISIBLE_DEVICES=1;
+    python methods/gan/train_gan.py --seed 1 --channels 64 --steps 150000 --no-spectral-norm --r1 10 --amp --tag r1amp --hours 5.5;
+    ) > runs/gpu1.log 2>&1 & p1=$!;
+    wait $p0; r0=$?; wait $p1; r1=$?;
+    tail -n 2 runs/gpu0.log runs/gpu1.log;
+    echo "return codes: gpu0 $r0, gpu1 $r1";
+    exit $r0
