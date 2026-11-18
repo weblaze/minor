@@ -46,9 +46,12 @@ N_AXES = 3
 
 
 def axes_of(x, k):
+    """Leading principal axes, with the sign convention of methods/f1/orientation.py (eigh of the covariance),
+    so that orientations can be compared between S2 and F1."""
     mean = x.mean(axis=0)
-    _, _, vt = np.linalg.svd(x - mean, full_matrices=False)
-    return mean, vt[:k].T
+    eigval, eigvec = np.linalg.eigh(np.cov(x - mean, rowvar=False))
+    order = np.argsort(eigval)[::-1][:k]
+    return mean, eigvec[:, order]
 
 
 def solve(d_a, target, hp, seeds, device, concentration=None):
