@@ -949,3 +949,44 @@ Conclusion: the R1 variant is the working G-GAN configuration. It is under-train
 - Checked locally: smoke pipeline (`scripts/smoke.py --methods s4`) passes; the real checkpoint loads and embeds paintings on the CPU. Not checked locally: the filterbank path (`torchaudio` is not installed on the laptop).
 - Launched: `abstraction-s4-probe` version 1 (extraction of all tracks and paintings, then the probe without `--assignments`). D-S4 on the F1 assignments is run locally from the fetched embeddings.
 - Results to follow.
+
+## 2026-11-18 — G-GAN R1 with mixed precision (Kaggle): three times faster, FD 492 at 29264 steps
+
+- Code: `pipeline` d9801ba; job `abstraction-gan-r1` version 1 (`scripts/kaggle/jobs/gan_r1.yaml`); runs `gan_r1amp_seed0_20261115T203214Z` (GPU 0, `--amp`), `gan_r1_seed0_20261115T203214Z` (GPU 1, float32). R1 penalty 10, no spectral normalisation, width 64, batch 64, seed 0, 6 h limit. Output: `runs/kaggle/abstraction-gan-r1/runs/`. Both runs stopped at the time limit; return code 0.
+- Mixed precision: no non-finite loss in 29264 steps; 0.74 s per step against 2.19 s in float32 (factor 2.96). FD at equal steps is within the spread of the float32 runs (one seed each).
+
+| Run | Steps | FD at 5000 | FD at 10000 | FD at 15000 | FD at 20000 | FD at 25000 | Last FD (step) | Kernel distance, last |
+|---|---|---|---|---|---|---|---|---|
+| R1, mixed precision | 29264 | 860.1 | 807.5 | 727.2 | 654.9 | 515.6 | 492.3 (29264) | 10.4 |
+| R1, float32 (this job) | 9862 | 911.4 | | | | | 817.9 (9862) | 21.7 |
+| R1, float32 (2026-11-16 entry) | 13651 | 940.7 | 787.0 | | | | 682.0 (13651) | 16.3 |
+
+- FD falls at every evaluation; the fall between 25000 and 29264 is smaller (515.6 to 492.3) than between 20000 and 25000 (654.9 to 515.6). Discriminator loss rises from about 2.0 to 3.4 (5.3 in the last logged step) with `d_real` above `d_fake` throughout the second half.
+- Samples at step 29264: larger coloured shapes on light or orange grounds, scribble and lattice textures, stripes, framed rectangles; a share of near-uniform tiles (light grey, orange) remains; fewer grid artefacts than at 13651.
+- Reference Frechet distances: training art 113.3, Q1 VAE reconstructions 208.5, Q1 mapper outputs 402 to 425, Q1 VAE prior samples 685.2 to 1261.4. The generator at 29264 is below every VAE prior and above the Q1 mapper outputs.
+- `checkpoint.pt` of both runs holds generator, discriminator, averaged generator, optimisers, scalers and step (29264 for the mixed-precision run), so either run can be continued with `--resume`.
+
+Conclusion: mixed precision is usable for G-GAN and is the setting for further runs. The R1 generator is still improving at 29264 steps. One seed.
+
+## 2026-11-18 — S4 probe (Kaggle): CAV-MAE embeddings of all tracks and paintings
+
+- Code: `pipeline` 1c56ab2; job `abstraction-s4-probe` version 1; runs `s4_extract_seed42_20261115T204546Z` (15 min on a T4), `s4_eval_probe_seed42_20261115T210034Z` (15 min). Embeddings: `runs/kaggle/abstraction-s4-probe/cav_mae_embeddings/` (7994 tracks, 3 windows each; 5832 paintings; 768 dimensions). Six tracks skipped (three too short, three not decodable), the same count as the MERT extraction.
+- Agreement with the encoders of phase 1 (test split; Mantel 9999 permutations, all p = 0.0001):
+
+| CAV-MAE against | n | Mantel r (Pearson) | Mantel rho | kNN overlap (k 10; chance) | Trustworthiness |
+|---|---|---|---|---|---|
+| MERT, mean code | 789 tracks | 0.324 | 0.328 | 0.154 (0.013) | 0.818 |
+| MERT, standardised code | 789 tracks | 0.364 | 0.343 | 0.206 (0.013) | 0.871 |
+| DINOv2 | 595 paintings | 0.562 | 0.556 | 0.228 (0.017) | 0.871 |
+
+- Track-painting cosine similarity S (all 7994 x 5832 pairs): mean 0.187, standard deviation 0.088, range -0.291 to 0.628. Mean similarity within tracks 0.418, within paintings 0.520; cosine of the two centroids 0.400. Variance shares of S: track 0.473, painting 0.244, track-painting interaction 0.282. Interaction rows of S computed from window 1 and window 2 of the same test track correlate at 0.809; of different tracks at 0.005.
+- S4 as a retrieval bridge without training (each test track receives the training painting with the highest S; scored with the standardised MERT code against DINOv2 features of the assigned paintings):
+
+| Assignment | Mantel r | kNN overlap | Trustworthiness | FD | Distinct paintings | Largest share |
+|---|---|---|---|---|---|---|
+| raw S | 0.080 | 0.066 | 0.677 | 633.0 | 222 | 0.075 |
+| S standardised per painting over training tracks | 0.060 | 0.047 | 0.619 | 402.9 | 444 | 0.032 |
+
+- For comparison, on the same measure (standardised code, seed 0, 2026-11-13 entry): F1 `f1` painting output 0.578, `f0` 0.303, `shuffled` 0.279, untrained random mapping 0.066.
+
+Conclusion: CAV-MAE orders tracks partly as MERT does (r 0.32 to 0.36) and paintings substantially as DINOv2 does (0.56). Its track-painting similarity has a pair-specific part (28 % of the variance) that is a stable property of the track (window agreement 0.81 against 0.005). Used directly as a bridge, that similarity carries little of the MERT distance structure into the paintings (r 0.06 to 0.08). Whether it prefers one orientation of the F1 mappings (D-S4) is tested in a separate entry.
