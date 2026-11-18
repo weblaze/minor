@@ -71,7 +71,7 @@ def main():
     for _ in range(args.triplets):
         triplets.append(sorted(rng.choice(chosen, size=3, replace=False).tolist()))
     trials = {"systems": {"s1": "S1 (generated, VAE)", "q1": "Q1 (generated, VAE)", "f1": "F1 (assigned painting)"},
-              "sources": {"s1": str(args.s1), "q1": str(args.q1), "f1": str(args.f1)},
+              "sources": {name: Path(run).name for name, run in (("s1", args.s1), ("q1", args.q1), ("f1", args.f1))},
               "seed": args.seed, "tracks": tracks, "match": match, "triplets": triplets}
     (out / "trials.json").write_text(json.dumps(trials, indent=1))
     print(f"{len(tracks)} tracks, {len(match)} match trials, {len(triplets)} triplets -> {out}")
