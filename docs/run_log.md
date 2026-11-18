@@ -994,3 +994,42 @@ Conclusion: CAV-MAE orders tracks partly as MERT does (r 0.32 to 0.36) and paint
 
 - The extraction job `abstraction-features` loaded `m-a-p/MERT-v1-95M` at revision `main` (`mert.revision: null` in `configs/base.yaml`) on 2026-11-09. The commit history of the model repository on huggingface.co (checked 2026-11-18) has no commit after 2025-05-25; `main` was therefore commit `12af15fef9d0ac838c3f475bfbbf26d2060dd4f5` ("Update configuration_MERT.py", 2025-05-25) at the time of the extraction. Hidden states were read through forward hooks (`hidden-state route: hooks` in `logs/07.log` of the job).
 - Resolves the item "MERT model revision (commit hash) used for extraction" in `docs/paper1/missing.md`, section 3.
+
+## 2026-11-19 — D-S4: CAV-MAE scores the orientations of 100 F1 mappings (local)
+
+- Code: `pipeline` 57ecf3e (`methods/f1/orientation.py --save-assignments`, `methods/s4/d_s4.py`); the orientation runs started with the same code uncommitted (`git_dirty` true in their meta.json), committed unchanged as 57ecf3e. GTX 1650. Runs `f1_orientation_dS4mean_seed0_20261118T170617Z`, `f1_orientation_dS4std_seed0_20261118T180444Z` (configuration `swd`, seeds 0 to 49, 4000 steps; the same configuration as the D-vote runs of 2026-11-14), `s4_d_s4_seed42_20261118T191133Z`, `s4_eval_probe_seed42_20261118T191146Z`. CAV-MAE embeddings from `abstraction-s4-probe`.
+- Score per seed: mean CAV-MAE similarity of the 789 assigned test track-painting pairs, as z against 999 random re-assignments of the same paintings to the same tracks (track and painting main effects cancel). Seeds are split by the sign of the axis correlation (orientation); p from 9999 permutations of the seed labels.
+
+| Code | Axis | Seeds positive / negative | Mean z, positive | Mean z, negative | p | Spearman (corr, z) |
+|---|---|---|---|---|---|---|
+| mean | 1 | 10 / 40 | -1.40 | 1.32 | 0.001 | -0.45 |
+| mean | 2 | 24 / 26 | 0.28 | 1.23 | 0.16 | -0.34 |
+| mean | 3 | 43 / 7 | 0.66 | 1.50 | 0.39 | -0.07 |
+| standardised | 1 | 34 / 16 | 1.34 | -1.26 | 0.002 | 0.45 |
+| standardised | 2 | 24 / 26 | 0.04 | 0.93 | 0.27 | -0.22 |
+| standardised | 3 | 26 / 24 | 0.09 | 0.95 | 0.28 | -0.11 |
+
+- Seeds with p < 0.05 against re-assignment: 21 of 50 (mean code), 16 of 50 (standardised). Mean z 0.77 (sd 2.32) and 0.50 (sd 2.79).
+- z does not follow mapping quality: Spearman with painting r -0.04 (mean) and 0.27 (standardised), with the number of distinct paintings -0.14 and -0.02; painting r of the two orientation groups 0.643 / 0.647 (mean) and 0.558 / 0.550 (standardised). After regressing z on painting r and distinct paintings, the axis-1 difference remains (-2.78, p 0.0004; 1.87, p 0.020).
+- Single F1 evaluations of 2026-11-12 (standardised code, seed 0), same score (raw S; S standardised per painting): `f1` z 4.66 (p 0.001); 5.55; `f0` 1.74 (0.043); 2.42; `shuffled` 1.13 (0.128); 1.51; untrained random mapping 1.38 (0.082); 1.07.
+
+Conclusion: on both codes CAV-MAE scores the axis-1 orientation chosen by the majority of seeds (D-vote: 40/50 negative on the mean code, 34/50 positive on the standardised code) above the minority orientation, and the difference is not explained by mapping quality. D-vote and D-S4 agree on axis 1 for both codes; neither test separates the orientations of axes 2 and 3. The trained F1 assignment scores above its controls. The axis signs are defined per code (principal axes of each code), so the two codes are not compared by sign.
+
+## 2026-11-19 — S2: blind matching by Gromov-Wasserstein (local)
+
+- Code: `pipeline` 21f22ac (`methods/s2/match.py`; entropic GW in PyTorch, square loss, cosine distances divided by their mean, regularisation annealed from 0.05 to 0.0005 by a factor 0.95 per step, 300 steps, 200 Sinkhorn iterations; 10 restarts from random couplings, the lowest objective selected). Orientations recomputed with the axis convention of `methods/f1/orientation.py` by `analysis/exploratory/s2_orientation.py` (5a1d829; the run itself used an SVD convention, fixed for later runs in a677747). GTX 1650. Run `s2_eval_match_seed42_20261118T172954Z`, 50 min per code. D-S4 on the restarts: `s4_d_s4_seed42_20261118T191603Z`.
+- Problem: the 789 test tracks (audio code, mean over windows) against the 4666 training paintings (DINOv2), no pairs, nothing trained. Solved on the test tracks themselves: the assignment uses the distances among the test tracks, unlike F1, whose mapping is trained on the training tracks.
+- Settings chosen before the run on the mean code with single solves: without annealing at 0.01 the coupling was nearly uniform (mean share of a track's mass on its largest painting 0.003); at 0.0005 with annealing it is 0.156, close to the limit set by the uniform marginals, with the lowest objective (0.0570 against 0.0742).
+
+| Code | GW (selected) | Gaussian reference, mean (sd) | Same-space reference | Mantel r | rho | kNN | Trustworthiness | FD | Kernel distance | Distinct paintings |
+|---|---|---|---|---|---|---|---|---|---|---|
+| mean | 0.0570 | 0.0692 (0.0013) | 0.0269 | 0.809 | 0.832 | 0.158 | 0.874 | 166.4 | -0.02 | 789 |
+| standardised | 0.0329 | 0.0253 (0.0003) | 0.0153 | 0.532 | 0.519 | 0.148 | 0.876 | 163.6 | -0.06 | 789 |
+
+- References (5 draws, best of 2 restarts each, against the best of the first 2 restarts of the real match): `gaussian`, as many samples of a Gaussian with the mean and covariance of the painting features as there are paintings; same-space, as many random training tracks. The mean code fits the art collection better than the Gaussian (z -9.2); the standardised code fits the Gaussian better than the art (z +28.4).
+- Restarts: all 10 objectives equal to four decimals; 91 % (mean) and 99 % (standardised) of tracks receive the same painting in two restarts; mean cosine of the two paintings 0.956 and 0.996 (random pairs 0.31). Coupling concentration 0.156 and 0.145.
+- Orientation (F1 axis convention), 10 restarts: mean code axis 1 negative in 10 (mean corr -0.885), axis 2 positive in 10 (0.774), axis 3 positive in 10 (0.395); standardised code axes 1, 2 and 3 positive in 10 (0.94, 0.65, 0.63). F1 D-vote for comparison (50 seeds): mean code 10/24/43 positive on axes 1/2/3; standardised 34/24/26.
+- D-S4 on the S2 assignments: mean z 0.00 (sd 0.25) on the mean code and 0.18 (sd 0.06) on the standardised code; no restart with p < 0.05.
+- For comparison (2026-11-13 and 2026-11-14 entries; F1 is trained on training tracks and evaluated on test tracks): F1 `f1` painting output, standardised code, seed 0: r 0.578, FD 342.8, 385 paintings; best mean-code recipes 0.737 to 0.747 with fewer than 400 paintings.
+
+Conclusion: matching shapes alone, without training, assigns each test track a different painting, keeps the audio distances at r 0.81 (mean code) and 0.53 (standardised code), and stays close to the art distribution (FD 164 to 166; training art 113). The solution does not depend on the initial coupling. Its axis-1 orientation is the one chosen by the majority of F1 seeds and preferred by CAV-MAE, on both codes; on the mean code its axis 3 also matches the F1 majority. CAV-MAE does not score the S2 pairs above random re-assignment, unlike the trained F1 pairs. Whether the mean-code result holds out of sample (matching training tracks, then placing test tracks) is not tested. One run per code.
