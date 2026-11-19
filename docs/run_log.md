@@ -1033,3 +1033,21 @@ Conclusion: on both codes CAV-MAE scores the axis-1 orientation chosen by the ma
 - For comparison (2026-11-13 and 2026-11-14 entries; F1 is trained on training tracks and evaluated on test tracks): F1 `f1` painting output, standardised code, seed 0: r 0.578, FD 342.8, 385 paintings; best mean-code recipes 0.737 to 0.747 with fewer than 400 paintings.
 
 Conclusion: matching shapes alone, without training, assigns each test track a different painting, keeps the audio distances at r 0.81 (mean code) and 0.53 (standardised code), and stays close to the art distribution (FD 164 to 166; training art 113). The solution does not depend on the initial coupling. Its axis-1 orientation is the one chosen by the majority of F1 seeds and preferred by CAV-MAE, on both codes; on the mean code its axis 3 also matches the F1 majority. CAV-MAE does not score the S2 pairs above random re-assignment, unlike the trained F1 pairs. Whether the mean-code result holds out of sample (matching training tracks, then placing test tracks) is not tested. One run per code.
+
+## 2026-11-19 — G-GAN R1 continued to 57568 steps, and a second seed (Kaggle): FD 388
+
+- Code: `pipeline` c5a7670; job `abstraction-gan-r1-resume` version 1 (`scripts/kaggle/jobs/gan_r1_resume.yaml`); runs `gan_r1amp_seed0_20261118T171246Z` (GPU 0, continued with `--resume` from `gan_r1amp_seed0_20261115T203214Z/checkpoint.pt` at step 29264) and `gan_r1amp_seed1_20261118T171246Z` (GPU 1, seed 1, from scratch). Both mixed precision, R1 penalty 10, width 64, batch 64, 5.5 h limit; both stopped at the limit. `git_dirty` true in meta.json (the Kaggle copy of the repository). Output: `runs/kaggle/abstraction-gan-r1-resume/runs/`.
+- Speed with both GPUs busy: 0.70 s per step (seed 0, 28304 steps) and 0.75 s per step (seed 1, 26364 steps).
+
+| Run | FD by step | Last FD (step) | Kernel distance, last |
+|---|---|---|---|
+| seed 0, continued | 522.9 (30000), 424.3 (35000), 489.9 (40000), 527.8 (45000), 406.8 (50000), 406.2 (55000) | 388.2 (57568) | 7.17 |
+| seed 1, new | 958.2 (5000), 740.9 (10000), 620.3 (15000), 566.9 (20000), 515.8 (25000) | 546.2 (26364) | 12.75 |
+
+- Seed 0 no longer falls at every evaluation: FD rises from 424 to 528 between 35000 and 45000, then falls to 388. The first evaluation after resuming (522.9 at 30000) is above the last one before it (492.3 at 29264).
+- Seed 1 follows seed 0 of the first job closely (860, 808, 727, 655, 516 at 5000 to 25000).
+- Samples of seed 0 at 57568: colour fields, blobs on light or orange grounds, scribble and crumpled textures, framed rectangles; about one tile in eight is still near uniform (light grey or off-white).
+- Reference Frechet distances: training art 113.3, Q1 VAE reconstructions 208.5, Q1 mapper outputs 402 to 425, Q1 VAE prior samples 685.2 to 1261.4. Seed 0 at 57568 is below the Q1 mapper outputs for the first time.
+- `checkpoint.pt` of both runs can be continued with `--resume`.
+
+Conclusion: the R1 generator keeps improving with more steps but no longer at every evaluation; FD 388 at 57568 steps (seed 0). A second seed reproduces the first 25000 steps of seed 0. `generator.pt` of seed 0 at 57568 is the current candidate for the GAN bridge.
