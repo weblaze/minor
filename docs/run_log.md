@@ -1104,3 +1104,25 @@ Conclusion: in this pilot, judges do not match tracks to their images above chan
 - Comparison: F1 five-seed best mean-code recipes 0.737 to 0.747 (FD about 340, fewer than 400 paintings); F1 lowest-FD recipe (pca64 + energy) r 0.61, FD 234, 555 paintings; transductive S2 0.809, FD 166.4, 789.
 
 Conclusion: assigning the placed test tracks jointly removes the crowding without losing structure: out of sample, S2 on the mean code gives every test track a different painting with Mantel r 0.710 and FD 225, against 0.717, FD 446 and 256 paintings with nearest-painting retrieval. Shuffled controls stay at or below 0.13. This is the best combination of structure, realism and variety among the out-of-sample methods so far; it needs no pairs and no trained network beyond a ridge map. One GW restart per code, one subset of 3000 training tracks.
+
+## 2026-11-19 — S2 out of sample against a pool of G-GAN images (local)
+
+- Code: `pipeline` 33ba3c8 (`methods/s2/gan_pool.py`; `--gallery` in `methods/s2/oos.py`). GTX 1650.
+- Pool `runs/gan_pool_r1amp_seed0_57568/`: 6000 images from `gan_r1amp_seed0_20261118T171246Z/generator.pt` (step 57568, averaged generator), latents N(0, I), seed 0. Near-blank images dropped: grey standard deviation below 0.06, or below 0.10 with mean saturation below 0.08 (thresholds set by inspecting 64 samples sorted by grey standard deviation; plain saturated colour fields are kept). Kept 5372 (89.5 %). The same rule would drop 5.5 % of the training paintings (near-empty minimal canvases). DINOv2 features of the kept images.
+- Run `s2_eval_oos_pool_seed42_20261119T123740Z`: as the joint-assignment entry above (3000 training tracks, one GW restart, knn and linear placement, nearest or joint assignment), with the GAN pool as the gallery in place of the 4666 training paintings. FD against the held-out paintings. Orientation corr here uses the principal axes of the pool, so axes 2 and 3 are not comparable with the painting runs.
+
+| Code | Placement | Mantel r | FD | Distinct images |
+|---|---|---|---|---|
+| mean | gw, linear, joint | 0.672 | 487.2 | 789 |
+| mean | gw, knn, joint | 0.617 | 497.8 | 789 |
+| mean | gw, linear (nearest) | 0.665 | 706.7 | 251 |
+| mean | shuffled, linear, joint | 0.106 | 528.6 | 789 |
+| mean | shuffled, knn, joint | -0.007 | 506.0 | 789 |
+| standardised | gw, linear, joint | 0.583 | 479.9 | 789 |
+| standardised | gw, knn, joint | 0.570 | 487.5 | 789 |
+| standardised | shuffled, linear, joint | 0.089 | 528.0 | 789 |
+
+- GW objective 0.0496 (mean code; paintings 0.0498) and 0.0312 (standardised; paintings 0.0317): the music matches the shape of the GAN pool as well as that of the paintings. Axis-1 corr -0.92 (mean code) and 0.88 (standardised), the same signs as with the paintings.
+- Reference FDs: generator at step 57568, random samples 388.2 (2026-11-19 GAN entry); training art 113.3; Q1 mapper outputs 402 to 425; S2 joint with real paintings 218 to 225.
+
+Conclusion: matched against generated images instead of real paintings, out-of-sample S2 with joint assignment gives every test track its own new image and keeps Mantel r 0.672 (mean code) and 0.583 (standardised, above the 0.548 with paintings); shuffled controls stay at or below 0.11. FD 480 to 490 is above the generator's own random samples (388), so the selected subset is less art-like than a random draw of the pool. First result in the project where generated images judged art-like by Arunav are assigned to music by a structure-preserving method. One run per code; no human evaluation yet.
