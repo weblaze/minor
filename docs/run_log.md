@@ -1051,3 +1051,35 @@ Conclusion: matching shapes alone, without training, assigns each test track a d
 - `checkpoint.pt` of both runs can be continued with `--resume`.
 
 Conclusion: the R1 generator keeps improving with more steps but no longer at every evaluation; FD 388 at 57568 steps (seed 0). A second seed reproduces the first 25000 steps of seed 0. `generator.pt` of seed 0 at 57568 is the current candidate for the GAN bridge.
+
+## 2026-11-19 — S2 out of sample: match training tracks, place test tracks (local)
+
+- Code: `pipeline` 30ec60c (`methods/s2/oos.py`, section `oos` of `methods/s2/config.yaml`); the run started with the same code uncommitted. GTX 1650. Run `s2_eval_oos_seed42_20261119T102209Z`, 17 to 19 min per code.
+- Method: entropic GW (settings of `match.py`) between 3000 random training tracks (audio code, mean over windows) and the 4666 training paintings; 3 restarts, the lowest objective selected. Each matched track gets a barycentric target (coupling-weighted mean of painting features). A test track is placed from its audio code alone, by `knn` (mean target of its 10 nearest matched tracks, cosine) or `linear` (ridge from audio code to target, strength 1.0 relative to the mean variance), and receives the nearest training painting (cosine). The test tracks take no part in the match. Control `shuffled`: the same placements from a random one-to-one pairing of matched tracks and paintings.
+
+| Code | Placement | Mantel r | rho | kNN | FD | Distinct paintings | Largest share |
+|---|---|---|---|---|---|---|---|
+| mean | gw, knn | 0.611 | 0.611 | 0.118 | 489.0 | 247 | 0.049 |
+| mean | gw, linear | 0.718 | 0.711 | 0.131 | 447.7 | 254 | 0.047 |
+| mean | shuffled, knn | -0.011 | -0.013 | 0.023 | 734.1 | 165 | 0.238 |
+| mean | shuffled, linear | 0.202 | 0.213 | 0.013 | 1701.8 | 26 | 0.929 |
+| standardised | gw, knn | 0.531 | 0.522 | 0.165 | 398.5 | 306 | 0.032 |
+| standardised | gw, linear | 0.528 | 0.529 | 0.148 | 406.1 | 276 | 0.029 |
+| standardised | shuffled, knn | 0.017 | 0.011 | 0.025 | 746.1 | 169 | 0.231 |
+| standardised | shuffled, linear | 0.025 | 0.022 | 0.019 | 1544.5 | 38 | 0.835 |
+
+- Restarts: objectives equal (0.0498 mean code, 0.0317 standardised); 99 % of test tracks receive the same painting in two restarts.
+- Orientation of the knn placement (F1 axis convention), 3 restarts: mean code axes 1/2/3 negative/positive/positive in 3 of 3 (corr -0.90, 0.82, 0.64), as in the transductive S2 run and the D-vote majority on axis 1; standardised code positive/positive/negative (0.88, 0.28, -0.14): axes 1 and 2 as in the transductive run, axis 3 reversed.
+- Comparison: transductive S2 (2026-11-19 entry) mean code r 0.809, FD 166.4, 789 distinct; standardised 0.532, FD 163.6, 789. F1 five-seed best mean-code recipes 0.737 to 0.747 with fewer than 400 paintings; F1 `f1` standardised seed 0: 0.578, FD 342.8, 385.
+
+Conclusion: the S2 structure holds out of sample. On the mean code, matching training tracks by shape and placing test tracks with a linear map gives Mantel r 0.718 (transductive 0.809; shuffled control 0.20); on the standardised code 0.53, equal to the transductive value. What does not carry over is the spread over paintings: placing tracks one at a time and taking the nearest painting gives 250 to 300 distinct paintings and FD 400 to 490, against 789 and FD 164 to 166 when all test tracks are matched jointly. One run per code; subset of 3000 training tracks.
+
+## 2026-11-19 — Human judging pilot: first 4 judges; Arunav's marks on the image atlas
+
+- Judging page (https://claude.ai/artifact/FqBet4gUoTsJdZGyM7YK5o, `scripts/judging/`): 4 sessions, 124 answers (one session stored directly, three imported from answer codes). Median 8.9 s per answer. Systems: S1 (`s1_eval_s1_judging`), Q1 (`q1_eval_q1_judging`, mean code), F1 (`f1_eval_f1`, standardised code, painting output); 24 test tracks.
+- Match trials (hear one track, pick its image from two; chance 0.5; one-sided binomial p): S1 8/20 (0.40, p 0.87), Q1 12/20 (0.60, p 0.25), F1 10/20 (0.50, p 0.59); all 30/60 (p 0.55).
+- Triplet trials (pair chosen as most alike from the audio, against the pair chosen from the three images of the same tracks; chance 1/3): S1 6/16 (p 0.45), Q1 7/16 (p 0.26), F1 5/16 (p 0.66).
+- With 20 match trials per system only accuracies of about 0.70 or more reach p < 0.05; about 150 to 200 answers per system are needed to detect 0.58.
+- Image atlas (https://claude.ai/artifact/SatUpkFo4tkVeL5NURDZ7a): every non-smoke image grid of the runs, 38 cards; Arunav marked 31 (art / partly / blobs and greys). Art: G-GAN R1 mixed precision seed 0 (to 57568 steps) and seed 1. Partly: G-GAN R1 float32 runs (v2, v3), Q1 standardised code. Blobs and greys: every S1 grid and control, Q1 mean code seeds 0 to 2, Q1 whitened code, Q1 controls, all VAE prior and reconstruction grids, Q1 PCA-alignment baselines (his note: the retrieval view is art), G-GAN v1 and spectral-norm runs. F1 and S2 (real paintings) not marked.
+
+Conclusion: in this pilot, judges do not match tracks to their images above chance for any system; the pilot can only exclude large effects. By eye, every image generated through the VAE is judged blobs and greys, and the R1 GAN is the only generator judged art.
