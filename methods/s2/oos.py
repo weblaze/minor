@@ -18,8 +18,11 @@ Per restart (`seeds` rows, format read by `methods/s4/d_s4.py`): orientation `co
 on the leading principal axes, GW objective, distinct paintings. `assignments_<code>.npz` holds the knn
 assignment of every restart.
 
+`--gallery <pool.npz>` (from `methods/s2/gan_pool.py`) replaces the training paintings by another image set
+(names, DINOv2 features), for example generated images; FD is still against the held-out paintings.
+
 Usage:
-  python methods/s2/oos.py [--codes mean standardised] [--restarts 3] [--n-match 3000]
+  python methods/s2/oos.py [--gallery runs/gan_pool_<name>/pool.npz] [--codes mean standardised] [--restarts 3] [--n-match 3000]
 """
 import time
 
@@ -73,6 +76,7 @@ def main():
     parser.add_argument("--restarts", type=int, default=None)
     parser.add_argument("--n-match", type=int, default=None)
     parser.add_argument("--permutations", type=int, default=None)
+    parser.add_argument("--gallery", default=None, help="pool.npz with names and DINOv2 features")
     args = parser.parse_args()
     config, device = setup(args)
     seed = config["system"]["seed"]
@@ -85,12 +89,15 @@ def main():
     hp["n_match"] = args.n_match or hp["n_match"]
     codes_wanted = args.codes or hp["codes"]
     n_perm = args.permutations or (199 if args.smoke else config["eval"]["n_permutations"])
-    config["run"] = {"codes": codes_wanted, **hp}
-    log = RunLog(config["paths"]["runs_dir"], run_name("eval_oos", args.smoke), config, seed)
+    config["run"] = {"codes": codes_wanted, "gallery": args.gallery, **hp}
+    log = RunLog(config["paths"]["runs_dir"], run_name("eval_oos" + ("_pool" if args.gallery else ""), args.smoke), config, seed)
 
     ids, layers, splits = load_layers(config, args.smoke)
     names, art, art_splits = load_art(config, device, args.smoke)
     gallery, gallery_names = art[art_splits == "train"], names[art_splits == "train"]
+    if args.gallery:
+        with np.load(args.gallery) as pool:
+            gallery, gallery_names = pool["features"].astype(np.float32), pool["names"]
     test_art = art[art_splits == "test"]
     art_mean, art_axes = axes_of(gallery, N_AXES)
     d_b = cosine_distances(torch.as_tensor(gallery, dtype=torch.float32, device=device))
