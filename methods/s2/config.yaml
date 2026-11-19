@@ -19,3 +19,9 @@ match:
 eval:
   knn_k: 10
   n_permutations: 9999
+
+oos:                        # methods/s2/oos.py
+  n_match: 3000             # random training tracks matched to the training paintings
+  restarts: 3
+  k: 10                     # nearest matched tracks per test track (knn placement)
+  alpha: 1.0                # ridge strength, relative to the mean variance of the audio code (linear placement)
