@@ -8,8 +8,10 @@ is then placed from its audio code alone:
   knn      mean of the targets of its `oos.k` nearest matched tracks (cosine distance of the audio codes)
   linear   ridge regression from audio code to target, fitted on the matched tracks
 
-and receives the training painting nearest (cosine) to its placed feature. Scored like the painting block
-of F1. Control `shuffled`: the same placements from a random one-to-one pairing of the matched tracks with
+and receives the training painting nearest (cosine) to its placed feature. Variant `_joint`: the placed
+test tracks are assigned to paintings together, each painting at most once, maximising the summed cosine
+similarity (a batch step that uses the placed features only, never the distances among test tracks).
+Scored like the painting block of F1. Control `shuffled`: the same placements from a random one-to-one pairing of the matched tracks with
 paintings instead of the GW coupling.
 
 Per restart (`seeds` rows, format read by `methods/s4/d_s4.py`): orientation `corr` of the knn placement
@@ -23,6 +25,7 @@ import time
 
 import numpy as np
 import torch
+from scipy.optimize import linear_sum_assignment
 
 from abstraction.pipeline.cli import setup
 from abstraction.pipeline.data import codes_of, load_layers
@@ -53,6 +56,15 @@ def place_linear(train_codes, targets, test_codes, alpha):
 
 def nearest(placed, gallery):
     return np.argmax(unit(placed) @ unit(gallery).T, axis=1)
+
+
+def joint(placed, gallery):
+    """One painting per test track, each painting used at most once: the assignment of all placed tracks
+    together that maximises the summed cosine similarity (Hungarian algorithm)."""
+    rows, cols = linear_sum_assignment(-(unit(placed) @ unit(gallery).T))
+    picks = np.empty(len(placed), dtype=int)
+    picks[rows] = cols
+    return picks
 
 
 def main():
@@ -115,20 +127,24 @@ def main():
         best = int(np.argmin([row["gw"] for row in rows]))
         shuffled_targets = gallery[rng.permutation(len(gallery))[np.arange(len(matched)) % len(gallery)]]
 
-        placements = {}
+        placements, joint_picks = {}, {}
         for source, targets in (("gw", targets_of[best]), ("shuffled", shuffled_targets)):
             for method in ("knn", "linear"):
                 placed = (place_knn(matched, targets, test_codes, hp["k"]) if method == "knn"
                           else place_linear(matched, targets, test_codes, hp["alpha"]))
-                picks = nearest(placed, gallery)
-                _, counts = np.unique(picks, return_counts=True)
-                placements[f"{source}_{method}"] = {
-                    **full_scores(test_codes, gallery[picks], test_art, config["eval"]["knn_k"], n_perm, seed),
-                    "n_distinct_paintings": int(len(counts)), "largest_share": float(counts.max() / len(picks)),
-                    "corr": score(picks)}
-                block = placements[f"{source}_{method}"]
-                print(f"  {code} {source}_{method}: r {block['structure']['mantel_pearson']:.3f}",
-                      f"FD {block['image_distribution']['frechet_distance']:.1f} distinct {len(counts)}", flush=True)
+                for assign in ("nearest", "joint"):
+                    picks = nearest(placed, gallery) if assign == "nearest" else joint(placed, gallery)
+                    name = f"{source}_{method}" + ("_joint" if assign == "joint" else "")
+                    if assign == "joint" and source == "gw":
+                        joint_picks[method] = picks
+                    _, counts = np.unique(picks, return_counts=True)
+                    placements[name] = {
+                        **full_scores(test_codes, gallery[picks], test_art, config["eval"]["knn_k"], n_perm, seed),
+                        "n_distinct_paintings": int(len(counts)), "largest_share": float(counts.max() / len(picks)),
+                        "corr": score(picks)}
+                    block = placements[name]
+                    print(f"  {code} {name}: r {block['structure']['mantel_pearson']:.3f}",
+                          f"FD {block['image_distribution']['frechet_distance']:.1f} distinct {len(counts)}", flush=True)
 
         signs = np.sign(np.array([row["corr"] for row in rows]))
         same = [float((knn_picks[a] == knn_picks[b]).mean())
@@ -143,6 +159,8 @@ def main():
             "seconds": round(time.time() - start, 1)}
         np.savez(log.dir / f"assignments_{code}.npz", track_ids=ids[splits == "test"],
                  seeds=np.arange(hp["restarts"]), painting_names=gallery_names[np.stack(knn_picks)])
+        np.savez(log.dir / f"joint_{code}.npz", track_ids=ids[splits == "test"], methods=np.array(list(joint_picks)),
+                 painting_names=gallery_names[np.stack(list(joint_picks.values()))])
         log.save_json("results.json", results)
     print(f"run directory: {log.dir}")
 
