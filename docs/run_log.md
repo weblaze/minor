@@ -1083,3 +1083,24 @@ Conclusion: the S2 structure holds out of sample. On the mean code, matching tra
 - Image atlas (https://claude.ai/artifact/SatUpkFo4tkVeL5NURDZ7a): every non-smoke image grid of the runs, 38 cards; Arunav marked 31 (art / partly / blobs and greys). Art: G-GAN R1 mixed precision seed 0 (to 57568 steps) and seed 1. Partly: G-GAN R1 float32 runs (v2, v3), Q1 standardised code. Blobs and greys: every S1 grid and control, Q1 mean code seeds 0 to 2, Q1 whitened code, Q1 controls, all VAE prior and reconstruction grids, Q1 PCA-alignment baselines (his note: the retrieval view is art), G-GAN v1 and spectral-norm runs. F1 and S2 (real paintings) not marked.
 
 Conclusion: in this pilot, judges do not match tracks to their images above chance for any system; the pilot can only exclude large effects. By eye, every image generated through the VAE is judged blobs and greys, and the R1 GAN is the only generator judged art.
+
+## 2026-11-19 — S2 out of sample with joint assignment of the placed test tracks (local)
+
+- Code: `pipeline` (commit after 30ec60c: `joint()` in `methods/s2/oos.py`). Run `s2_eval_oos_seed42_20261119T110951Z`, one GW restart per code (the three restarts of the previous run had equal objectives and gave 99 % the same paintings); otherwise the settings of the previous entry. The match itself is identical (GW 0.0498 and 0.0317; non-joint values reproduce the previous run within 0.005).
+- `_joint`: all 789 placed test tracks are assigned to the 4666 training paintings together, each painting at most once, maximising the summed cosine similarity between placed feature and painting (Hungarian algorithm). The step uses the placed features only, not the distances among the test tracks; it does use the test tracks as one batch.
+
+| Code | Placement | Mantel r | kNN | FD | Distinct | Orientation corr (axes 1/2/3) |
+|---|---|---|---|---|---|---|
+| mean | gw, linear, joint | 0.710 | 0.134 | 224.7 | 789 | -0.91 / 0.86 / 0.73 |
+| mean | gw, knn, joint | 0.632 | 0.122 | 243.5 | 789 | -0.91 / 0.83 / 0.71 |
+| mean | shuffled, linear, joint | 0.132 | 0.030 | 295.4 | 789 | |
+| mean | shuffled, knn, joint | 0.033 | 0.021 | 260.8 | 789 | |
+| standardised | gw, linear, joint | 0.548 | 0.141 | 218.2 | 789 | 0.90 / 0.28 / -0.17 |
+| standardised | gw, knn, joint | 0.520 | 0.147 | 220.7 | 789 | 0.89 / 0.27 / -0.14 |
+| standardised | shuffled, linear, joint | 0.078 | 0.026 | 296.6 | 789 | |
+| standardised | shuffled, knn, joint | 0.013 | 0.023 | 274.3 | 789 | |
+
+- Without the joint step (same run): mean code linear 0.717, FD 445.5, 256 distinct; standardised linear 0.527, FD 406.5, 275 distinct.
+- Comparison: F1 five-seed best mean-code recipes 0.737 to 0.747 (FD about 340, fewer than 400 paintings); F1 lowest-FD recipe (pca64 + energy) r 0.61, FD 234, 555 paintings; transductive S2 0.809, FD 166.4, 789.
+
+Conclusion: assigning the placed test tracks jointly removes the crowding without losing structure: out of sample, S2 on the mean code gives every test track a different painting with Mantel r 0.710 and FD 225, against 0.717, FD 446 and 256 paintings with nearest-painting retrieval. Shuffled controls stay at or below 0.13. This is the best combination of structure, realism and variety among the out-of-sample methods so far; it needs no pairs and no trained network beyond a ridge map. One GW restart per code, one subset of 3000 training tracks.
