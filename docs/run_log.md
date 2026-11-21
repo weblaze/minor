@@ -1234,3 +1234,15 @@ Conclusion: with a lower start epsilon the oriented starts give real alternative
 - Samples (s3): varied colour fields, black shapes on white, stripes, textures, gestural marks; a few near-blank white images.
 
 Conclusion: the jointly trained mapper and reader invent a code in which the test track is named from its image alone in 78 % of cases (chance 0.13 %; untrained mapper 14 %), at FD 426, close to the generator's own samples (388). The code survives the training augmentation (86 %) and a different 10 s window of the track (40 to 46 %). Without augmentation the code is read better from clean images but breaks under the augmentation (86 to 65 %), so the augmentation makes it robust without removing it. A fresh reader on DINO v1, an encoder the game never saw, recovers 52 % (untrained mapper 6 %), so the code is carried by visual content that another self-supervised encoder also sees, not only by DINOv2-specific patterns; the augmented run transfers better (52 % against 45 %). Distance structure is weak (r 0.18): S3 makes tracks distinguishable, not similar tracks similar. One seed.
+
+## 2026-11-22 — S1 through the G-GAN with a weaker structure term (Kaggle)
+
+- Job `abstraction-gan-bridge-s1-lambda`, `pipeline` 8847d85. S1 mapper into the G-GAN (`gan_r1amp_seed0_20261118T171246Z`), mean code, seed 0, 20000 steps, T4; only `lambda_struct` changed from 1.0. Evaluation on the 789 test tracks.
+
+| lambda_struct | Mantel r | Spearman | kNN overlap (chance 0.013) | trustworthiness | FD | participation ratio | mean pairwise dist (test art 0.672) |
+|---|---|---|---|---|---|---|---|
+| 1.0 (earlier run, s1gan) | 0.755 | — | — | — | 1210 | — | — |
+| 0.3 | 0.662 | 0.688 | 0.088 | 0.744 | 1091 | 15.6 | 0.439 |
+| 0.1 | 0.668 | 0.694 | 0.085 | 0.738 | 1061 | 13.9 | 0.485 |
+
+Conclusion: a weaker structure term costs about 0.09 of r and barely moves FD (1210 to 1061-1091; Q1 through the same GAN reaches 458). The collapse of S1 through the GAN is therefore not caused by the weight of the structure term. One seed.
