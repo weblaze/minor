@@ -23,6 +23,20 @@ scripts/results.py           table of all evaluation runs
 scripts/kaggle/              launch.py, kernel.py, make_job.py, jobs/, experiments/
 ```
 
+Methods on this branch (2026-11-22):
+
+| Folder | Bridge or tool | Main stages |
+|---|---|---|
+| `methods/s1` | S1 (and S0) | train_vae, train_mapper, evaluate |
+| `methods/q1` | Q1 | train_vae, train_mapper, evaluate, gate, diagnostics, baselines |
+| `methods/f1` | F1 | train_mapper, evaluate, diagnose, realism, orientation, b_tasks (B-anchor, B-cluster) |
+| `methods/s2` | S2 | match, oos, gan_pool, cluster (B-cluster), anchor (B-anchor) |
+| `methods/s3` | S3 | train, identify (scores and images through `methods/s1/evaluate.py`) |
+| `methods/s4` | S4 | extract, probe, d_s4, bridge, bridge_identify |
+| `methods/gan` | G-GAN | train_gan |
+
+S3 and the S4 bridge write `mapper.pt` in the S1 format, so `methods/s1/evaluate.py --generator gan --mapper <run>/mapper.pt` scores their structure and realism and saves their images. S3 and S4 load S1's `common.py` and `data.py` by file path under the names `s1_common` and `s1_data`; F1's `b_tasks.py` loads S2's `common.py` the same way.
+
 A method folder keeps what is specific to the method: its losses and variants, its VAE training, its own code transform where it differs from the shared one (S1, see below), and its evaluation output format. Everything that two or more methods used in identical form lives in `abstraction/pipeline/`.
 
 S1 keeps its own code transform (`methods/s1/data.py`). Its `standardised` and `whitened` statistics are computed with `numpy.mean`/`numpy.std` in float64, the shared transform with chunked sums of x and x²; the results differ in the last bits, so replacing it would change S1 runs with those codes. Q1 uses the shared transform, which gives bit-identical codes for Q1.
