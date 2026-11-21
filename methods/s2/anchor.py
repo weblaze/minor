@@ -19,6 +19,7 @@ Usage:
   python methods/s2/anchor.py [--codes mean standardised] [--embeddings datasets/cav_mae_embeddings]
 """
 import itertools
+from pathlib import Path
 import time
 
 import numpy as np
@@ -61,7 +62,7 @@ def main():
     parser.add_argument("--codes", nargs="+", default=None)
     parser.add_argument("--n-match", type=int, default=None)
     parser.add_argument("--permutations", type=int, default=None)
-    parser.add_argument("--embeddings", default="datasets/cav_mae_embeddings")
+    parser.add_argument("--embeddings", default=str(Path(__file__).resolve().parents[2] / "datasets" / "cav_mae_embeddings"))
     parser.add_argument("--null", type=int, default=999)
     args = parser.parse_args()
     config, device = setup(args)

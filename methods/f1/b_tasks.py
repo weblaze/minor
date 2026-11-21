@@ -89,7 +89,7 @@ def main():
     parser.add_argument("--k", type=int, nargs="+", default=[8, 16])
     parser.add_argument("--group-restarts", type=int, default=50)
     parser.add_argument("--steps", type=int, default=None)
-    parser.add_argument("--embeddings", default="datasets/cav_mae_embeddings")
+    parser.add_argument("--embeddings", default=str(Path(__file__).resolve().parents[2] / "datasets" / "cav_mae_embeddings"))
     parser.add_argument("--null", type=int, default=999)
     args = parser.parse_args()
     config, device = setup(args)
