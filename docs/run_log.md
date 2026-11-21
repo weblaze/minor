@@ -1126,3 +1126,52 @@ Conclusion: assigning the placed test tracks jointly removes the crowding withou
 - Reference FDs: generator at step 57568, random samples 388.2 (2026-11-19 GAN entry); training art 113.3; Q1 mapper outputs 402 to 425; S2 joint with real paintings 218 to 225.
 
 Conclusion: matched against generated images instead of real paintings, out-of-sample S2 with joint assignment gives every test track its own new image and keeps Mantel r 0.672 (mean code) and 0.583 (standardised, above the 0.548 with paintings); shuffled controls stay at or below 0.11. FD 480 to 490 is above the generator's own random samples (388), so the selected subset is less art-like than a random draw of the pool. First result in the project where generated images judged art-like by Arunav are assigned to music by a structure-preserving method. One run per code; no human evaluation yet.
+
+
+## 2026-11-21 — B-cluster and B-anchor on S2 out of sample (local)
+
+- Code: `pipeline` 5ad1a6e (`methods/s2/cluster.py`, `methods/s2/anchor.py`). GTX 1650. 3000 matched training tracks, test 789, gallery 4666 training paintings, joint assignment.
+- B-cluster: k-means groups of the matched tracks and of the gallery, groups paired by GW between centroids (weighted by size, best of 50 restarts) and the Hungarian algorithm, GW inside each paired group, then placement and joint assignment. Control: random pairing of groups. Mantel r, linear placement:
+
+| Code | K | Paired by GW | Random pairing |
+|---|---|---|---|
+| mean | 8 | 0.486 | 0.427 |
+| mean | 16 | 0.530 | 0.352 |
+| mean | 32 | 0.567 | 0.294 |
+| standardised | 8 | 0.449 | 0.339 |
+| standardised | 16 | 0.455 | 0.230 |
+| standardised | 32 | 0.473 | 0.243 |
+
+- Reference: flat S2 out of sample 0.710 (mean), 0.548 (standardised). Shuffled 0.16 and 0.08. FD 231 to 245.
+- B-anchor: for each of the 8 sign patterns of the top-3 axes, GW started from the transport plan of the oriented linear cost. All 8 starts end at the same coupling (GW 0.0498 mean, 0.0320 standardised; same train corr, test r 0.709 to 0.711 and 0.548 to 0.551). The start at epsilon 0.05 erases the initial orientation, so there are no distinct candidates for the judge. Judge z differences between candidates are noise (train/test z corr -0.90 on mean).
+
+Conclusion: B-cluster lowers structure at every K on both codes; group pairing by shape carries information (above random pairing, gap growing with K) but less than the flat match. B-anchor as built does not produce alternatives: a smaller starting epsilon or a fused orientation term is needed before the judge can choose.
+
+## 2026-11-21 — B-anchor and B-cluster on F1 (local)
+
+- Code: `pipeline` 5ad1a6e (`methods/f1/b_tasks.py`). 20 seeds of F1 config `swd` per code. Runs `f1_b_tasks_seed0_20261121T110306Z` (mean), `f1_b_tasks_seed0_20261121T113719Z` (standardised).
+- B-anchor: CAV-MAE judge z of each seed on the validation tracks; anchored seed = highest validation z.
+
+| Code | val/test judge z corr | anchored: test r, z | lowest val SWD: r, z | mean of seeds: r, z | axis-1 majority |
+|---|---|---|---|---|---|
+| mean | 0.88 | 0.624, 3.67 | 0.664, 1.64 | 0.646, 1.02 | 16/20 negative; anchored negative |
+| standardised | 0.88 | 0.556, 4.85 | 0.573, 5.00 | 0.556, 1.36 | 14/20 positive; anchored positive |
+
+- B-cluster: test tracks restricted to the paintings of the GW-paired group. Mean of 20 seeds, Mantel r: mean code K 8 0.515 (random groups 0.407), K 16 0.472 (0.440); standardised K 8 0.428 (0.406), K 16 0.399 (0.300). Judge z in this arm varies from -0.9 to 2.8 without pattern.
+
+Conclusion: the machine judge's choice of seed carries over to held-out tracks (corr 0.88) and picks the axis-1 majority orientation on both codes, at about the mean structure; axes 2 and 3 stay unfixed. B-cluster lowers structure on F1 as on S2.
+
+## 2026-11-21 — S1 with the G-GAN bridge (Kaggle)
+
+- Job `abstraction-gan-bridge-s1`, `pipeline` 8bd0ce9. Generator `gan_r1amp_seed0_20261118T171246Z`, prior N(0, I) as latent reference. 20000 steps, seed 0, T4. Final val l_dist 0.115, l_struct 0.245.
+
+| Variant | Mantel r | FD (held-out art) | Participation ratio |
+|---|---|---|---|
+| s1 | 0.755 | 1210.3 | 11.6 |
+| shuffled | 0.108 | 866.6 | 21.4 |
+| random M | 0.046 | 645.2 | 26.2 |
+
+- Reference: training art FD 113.3; generator random samples 388.2; held-out art participation ratio 44.8.
+- Samples: most test tracks map to one family of red-orange horizontal stripe images; a few outliers (white with black shapes, yellow bars, textured fields).
+
+Conclusion: S1 through the GAN preserves structure strongly (r 0.755) but collapses most tracks onto one image family; FD 1210 is far above random generator samples. The latent distribution term does not keep the mapper inside the varied part of the GAN's input space. Needs a stronger latent term or a feature distribution term before it is usable.
