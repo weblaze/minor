@@ -11,10 +11,10 @@ The `main` branch holds the cleaned code base and no trained model. Since 2026-1
 
 Data in use: FMA-small (music) and abstract paintings from four WikiArt styles. Encoders: MERT-v1-95M (audio) and DINOv2 ViT-S/14 (image), both frozen and both trained without text. From phase 2 also CAV-MAE-Scale++, an audio-visual model pretrained on video without text or labels.
 
-| Phase | State on 2026-11-19 |
+| Phase | State on 2026-11-21 |
 |---|---|
 | 1: structure transfer with a VAE (S0, S1, Q1, F1, S2) | S0, S1, Q1, F1 and S2 run and evaluated; a paper draft exists; human judging page built |
-| 2: S4, then S3, with G-GAN and then diffusion | G-GAN trained in three runs and still improving; S4 probe run; the GAN can paint for S1 and Q1; S3 and diffusion not started |
+| 2: S4, then S3, with G-GAN and then diffusion | G-GAN trained in three runs and still improving; S4 probe run; S1 through the GAN keeps structure but collapses onto one image family; S3 designed, not built; diffusion not started |
 | 2.5 and 3 | not started |
 
 Progress of phase 1 (as of 2026-11-14):
@@ -36,6 +36,8 @@ Progress since 2026-11-14:
 - S2 matches the shape of the music collection to the shape of the art collection with Gromov-Wasserstein, without pairs and without training. On the mean audio code it gives every test track a different real painting and keeps the distance structure of the music more strongly than the trained F1 mappings; it is solved on the test tracks themselves. Out of sample (the shape match uses training tracks only, and each test track is placed from its audio code alone) the structure holds at Mantel r 0.72 on the mean code, but the tracks crowd onto about 250 paintings; handing out the paintings jointly (each used once) restores a different painting for every track at r 0.71 and Frechet distance 225. Matched against a pool of images drawn by the GAN instead of real paintings, the same procedure gives every track its own newly generated image at r 0.67 (Frechet distance 487). On the standardised code the music fits a structureless reference cloud better than it fits the art.
 - Human judging pilot (4 judges, 124 answers): judges do not yet match tracks to their images above chance for S1, Q1 or F1; the pilot is too small to detect modest effects. By eye, the images generated through the VAE read as blobs and greys, and the R1 GAN is the only generator judged to look like art.
 - Orientation: which way round the leading contrast of the music maps onto the art is not fixed by distance matching. Three machine-side judges now agree on it for the leading axis: the majority of fifty randomly initialised F1 mappings, the score of the video-trained model (D-S4), and the S2 shape match.
+- Machine anchoring and grouping (2026-11-21): the video-trained model's choice among twenty F1 mappings, made on validation tracks, carries over to test tracks (correlation 0.88) and agrees with the majority orientation. Splitting both collections into groups and matching group to group lowers structure for S2 and F1 at every group count tried. Trying every orientation as a start of the S2 shape match gave the same match each time, so that test is not yet informative.
+- S1 painted through the GAN keeps the distance structure of the music on held-out tracks (Mantel r 0.75) but maps most tracks to one family of red striped images (Frechet distance 1210).
 - A judging page for the human pilot of phase 1 is built: judges hear a clip and pick the picture that fits it, and pair clips and pictures by similarity.
 
 Q1 on the mean code has three seeds and the F1 retrieval results have five to fifty; all other results are from a single seed. No human evaluation has been made yet. The results are preliminary and are not reported here as findings.
