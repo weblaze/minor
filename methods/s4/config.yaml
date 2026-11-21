@@ -16,3 +16,25 @@ probe:
   knn_k: 10
   n_permutations: 9999
   n_null: 999               # random re-assignments for the null of an assignment score
+
+# S4 bridge (methods/s4/bridge.py, bridge_identify.py): mapper -> frozen G-GAN -> frozen CAV-MAE image encoder.
+mapper:
+  hidden: 1024
+  depth: 3
+  batch_size: 64            # tracks per batch, one window per track
+  real_batch_size: 256
+  lr: 1.0e-4
+  steps: 15000
+  swd_projections: 256
+  val_every: 500
+  amp: false
+
+bridge:
+  code: "mean"              # MERT code fed to the mapper (as S1, Q1, S3)
+  temperature: 0.1          # InfoNCE between CAV-MAE image embeddings and the fixed CAV-MAE audio embeddings
+  w_lat: 1.0                # sliced Wasserstein of mapped latents to the generator prior
+  w_feat: 1.0               # sliced Wasserstein of DINOv2 features of the images to real art
+
+eval:
+  knn_k: 10
+  n_permutations: 9999

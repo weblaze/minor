@@ -65,3 +65,40 @@ def splits_of(identifiers, config):
 
 def unit(x):
     return x / np.linalg.norm(x, axis=-1, keepdims=True)
+
+
+def _s1_data():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("s1_data", Path(__file__).parents[1] / "s1" / "data.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def cav_inputs(directory, smoke, cav):
+    """CAV-MAE audio embeddings per track {id: (n_windows, d)}, image embeddings (n, d), painting names.
+    In smoke runs: None (synthetic audio embeddings are made per track) and no images."""
+    if smoke:
+        return None, None, None
+    ids, audio, names, images = load_cav_embeddings(directory)
+    return {str(t): a for t, a in zip(ids, audio)}, images, names
+
+
+def aligned_codes(config, split, cav_audio, smoke, embed_dim=96):
+    """MERT codes (n, n_windows, 768) and CAV-MAE audio embeddings (n, n_windows, d) of the tracks of a split
+    that have both, in the same order; the windows are the same windows of each track."""
+    ids, codes = _s1_data().load_codes(config, split, smoke)
+    if cav_audio is None:
+        rng = np.random.default_rng(len(split))
+        return codes, rng.normal(size=(len(ids), codes.shape[1], embed_dim)).astype(np.float32)
+    keep = [i for i, t in enumerate(ids) if str(t) in cav_audio]
+    return codes[keep], np.stack([cav_audio[str(ids[i])] for i in keep]).astype(np.float32)
+
+
+def image_centre(config, images, names, smoke, embed_dim=96):
+    """Mean CAV-MAE embedding of the training paintings."""
+    if images is None:
+        return np.zeros(embed_dim, dtype=np.float32)
+    val, test = config["split"]["val_percent"], config["split"]["test_percent"]
+    train = np.array([split_of(str(n), val, test) == "train" for n in names])
+    return images[train].mean(axis=0).astype(np.float32)

@@ -1,0 +1,30 @@
+description: >-
+  S4 bridge with the G-GAN generator (gan_r1amp seed 0, step 57568): mapper trained so that the frozen CAV-MAE
+  pairs each generated image with its own sound among the batch (InfoNCE against precomputed CAV-MAE audio
+  embeddings of the same window), plus latent and DINOv2-feature distribution terms. GPU 0 variant s4, GPU 1
+  shuffled. Seed 0, 15000 steps (time limit 4.5 h), batch 48, identification and S1 evaluation on the test split.
+name: abstraction-s4-bridge-gan
+branch: pipeline
+datasets:
+  - arunavganguly/abstraction-cav-mae
+kernels:
+  - "{user}/abstraction-features"
+  - "{user}/abstraction-gan-r1-resume"
+  - "{user}/abstraction-s4-probe"
+inputs:
+  MERT: mert_embeddings
+  ART_ZIP: abstract_art.zip
+  GAN: gan_r1amp_seed0_20261118T171246Z
+  CAV: audio_model.21.pth
+  CAVEMB: cav_mae_embeddings
+setup:
+  - nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+  - python -m zipfile -e {ART_ZIP} datasets/
+  - ln -s {MERT} datasets/mert_embeddings
+chains:
+  - - s4 bridge --vae {GAN}/generator.pt --checkpoint {CAV} --embeddings {CAVEMB} --variant s4 --seed 0 --tag gan --hours 4.5 --batch-size 48
+    - s4 bridge_identify --vae {GAN}/generator.pt --checkpoint {CAV} --embeddings {CAVEMB} --seed 0 --tag gan --run runs/s4_bridge_s4_gan_seed0_*
+    - s1 evaluate --generator gan --vae {GAN}/generator.pt --seed 0 --tag s4gan --save-images --mapper runs/s4_bridge_s4_gan_seed0_*/mapper.pt
+  - - s4 bridge --vae {GAN}/generator.pt --checkpoint {CAV} --embeddings {CAVEMB} --variant shuffled --seed 0 --tag gan --hours 4.5 --batch-size 48
+    - s4 bridge_identify --vae {GAN}/generator.pt --checkpoint {CAV} --embeddings {CAVEMB} --seed 0 --tag gan --run runs/s4_bridge_shuffled_gan_seed0_*
+    - s1 evaluate --generator gan --vae {GAN}/generator.pt --seed 0 --tag s4gan --save-images --mapper runs/s4_bridge_shuffled_gan_seed0_*/mapper.pt
