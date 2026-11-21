@@ -1,6 +1,6 @@
-# S3: self-invented visual language (design, not implemented)
+# S3: self-invented visual language
 
-Status 2026-11-21: design proposal by Claude, not yet approved by the project owner. No code exists.
+Status 2026-11-21: design by Claude; the three open points were decided by Arunav on 2026-11-21 (below). Code: `train.py`, `identify.py`, `config.yaml`; Kaggle job `scripts/kaggle/experiments/s3_gan.yaml`. No run on real data yet.
 
 ## Idea
 
@@ -15,7 +15,8 @@ audio code a --M--> latent z --G (frozen G-GAN)--> image x --aug--> DINOv2 (froz
 - G: the G-GAN generator (gan_r1amp seed 0, the one marked "art"), frozen. Only images G can make are possible messages, which keeps them in the abstract-art manifold.
 - M: the mapper of S1 (`abstraction/models/mapper.py`), audio code to z.
 - R: a small MLP from DINOv2 features to an embedding of the audio-code dimension.
-- aug: random resized crop, flip, small blur and noise applied to x before DINOv2. The message has to survive changes a viewer would not notice. This should stop it from hiding in pixel patterns that only DINOv2 sees. There is no colour jitter, because colour is expected to carry information.
+- aug: light random resized crop (85 to 100 % of the area, aspect kept), small noise and, on 30 % of images, a light blur, applied to x before DINOv2. The message has to survive changes a viewer would not notice. This should stop it from hiding in pixel patterns that only DINOv2 sees. No flip, because it changes the composition; no colour jitter, because colour is expected to carry information.
+- The audio side of the game is a second small MLP from the audio code to the same embedding space; both MLPs together are R.
 
 ## Loss
 
@@ -52,8 +53,10 @@ There is no structure term: S3 does not ask that similar tracks look similar. Wh
 
 One S3 step is about one S1 step plus a small reader: about 2.2 s per step on the laptop GPU, about 1 s on a Kaggle T4. 20000 steps take about 6 h per run. Two runs fit in one Kaggle session (s3 and shuffled on two GPUs).
 
-## Open points for the project owner
+## Decisions (Arunav, 2026-11-21)
 
-1. Is a jointly trained reader acceptable? The alternative is a fixed linear readout, which is close to S1/F1 and invents less.
-2. The augmentation set: crop, flip, blur and noise, without colour jitter.
-3. Should the G-GAN be the only generator for S3 at first? The roadmap says GAN first, diffusion second.
+1. The reader is trained together with the mapper.
+2. Augmentation: flip and noise might ruin the composition, and blur might collapse detail; use them only if they do not. Implemented: no flip; noise and blur kept light (config `s3.aug`). The `s3_noaug` variant and the clean versus augmented scores of `identify.py` measure what the augmentation costs.
+3. G-GAN first; other generators later.
+
+Not yet implemented from the evaluation list: the second reader on DINO v1 and the window-consistency comparison of two windows (identify.py tests single-window images against the track's code instead).

@@ -66,9 +66,12 @@ def sinkhorn_log(cost, log_p, log_q, eps, iterations):
 
 
 def gromov_wasserstein(d_a, d_b, eps, outer, inner, generator=None, tol=1e-7, eps_start=None, decay=0.95,
-                       p=None, q=None, init=None):
+                       p=None, q=None, init=None, feature_cost=None, alpha=0.0):
     """Entropic Gromov-Wasserstein coupling between two metric spaces (square loss), with uniform weights
     unless the point weights `p`, `q` (each summing to 1) are given.
+
+    With `feature_cost` (n, m) and `alpha` > 0 the problem is fused GW (Vayer et al., ICML 2019): the
+    objective is (1 - alpha) * GW + alpha * <feature_cost, T>.
 
     Alternates the linearisation L(T) = const - 2 D_a T D_b with an entropic transport step
     (Peyre, Cuturi and Solomon, ICML 2016). The regularisation starts at `eps_start` (default `eps`) and is
@@ -90,15 +93,21 @@ def gromov_wasserstein(d_a, d_b, eps, outer, inner, generator=None, tol=1e-7, ep
     else:
         noise = torch.rand(n, m, generator=generator).to(device=device, dtype=d_a.dtype)
         coupling = sinkhorn_log(noise, log_p, log_q, 0.1, inner)
+    fused = feature_cost is not None and alpha > 0
+
+    def linearised(t):
+        gw = constant - 2 * d_a @ t @ d_b
+        return (1 - alpha) * gw + alpha * feature_cost if fused else gw
+
     previous = math.inf
     current = eps_start or eps
     for _ in range(outer):
-        linear = constant - 2 * d_a @ coupling @ d_b
+        linear = linearised(coupling)
         value = float((linear * coupling).sum())
         if current <= eps and abs(previous - value) < tol:
             break
         previous = value
         coupling = sinkhorn_log(linear, log_p, log_q, current, inner)
         current = max(eps, current * decay)
-    value = float(((constant - 2 * d_a @ coupling @ d_b) * coupling).sum())
+    value = float((linearised(coupling) * coupling).sum())
     return coupling, value
