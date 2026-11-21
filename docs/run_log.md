@@ -1210,3 +1210,27 @@ Conclusion: Q1 through the GAN keeps structure (r 0.54, shuffled 0.04) with vari
 - Cost of anchoring in structure against flat S2 out of sample (0.710 mean, 0.548 standardised): 0.016 at alpha 0 and 0.042 at alpha 0.1 on the mean code; none on the standardised code. With alpha 0.1, forcing axis 3 negative on the mean code lowers r to 0.49 to 0.55.
 
 Conclusion: with a lower start epsilon the oriented starts give real alternatives, and the CAV-MAE judge chooses among them consistently: its choice on training tracks predicts the test tracks (corr 0.85 to 0.94), agrees with shape matching and the earlier machine judges on axis 1, and adds a consistent choice for axis 2 (negative on both codes). At alpha 0 the anchored S2 match keeps the structure of flat S2 within 0.02. One subset of training tracks, one run per setting.
+
+## 2026-11-21/22 — S3 through the G-GAN (Kaggle) and second-reader check (local)
+
+- Job `abstraction-s3-gan`, `pipeline` 1030cc4 (`methods/s3/train.py`, `identify.py`; decisions of 2026-11-21: reader trained with the mapper, no flip, light noise and blur, G-GAN first). Generator `gan_r1amp_seed0_20261118T171246Z`. Mean code, seed 0, 15000 steps per run (none hit the 2.75 h limit), T4. Augmentation: crop 85 to 100 % of the area, noise std 0.02, blur sigma 0.6 on 30 % of images. Loss InfoNCE (temperature 0.1) + 1.0 latent SWD + 1.0 DINOv2-feature SWD.
+- Identification on the 789 test tracks (chance top1 0.0013, maximum 9.62 bits). "track": image from the mean code; "window": image from one random window, ranked against the track codes. clean / augmented = reader input without / with one draw of the training augmentation.
+
+| Variant | track top1 clean | track top1 aug | top10 clean | bits clean | window top1 clean / aug | Mantel r | FD |
+|---|---|---|---|---|---|---|---|
+| s3 | 0.777 | 0.859 | 0.990 | 7.42 | 0.397 / 0.460 | 0.179 | 425.8 |
+| s3_noaug | 0.863 | 0.649 | 0.999 | 7.76 | 0.437 / 0.321 | 0.190 | 424.1 |
+| shuffled | 0.000 | 0.003 | 0.015 | 0.00 | 0.001 / 0.003 | 0.078 | 390.2 |
+| random_m | 0.138 | 0.144 | 0.460 | 3.17 | 0.077 / 0.087 | — | — |
+
+- Second reader (`methods/s3/second_reader.py`, pipeline 8847d85, GTX 1650): mapper frozen, one image per track for all splits, a fresh reader of the same architecture trained by InfoNCE on the 6408 training tracks only (3000 steps, batch 256, best validation loss), on frozen features of DINO ViT-B/16 (v1, CLS; not used in S3 training) or of DINOv2 (as in training). Test tracks:
+
+| Run | DINO v1 top1 | top10 | bits | DINOv2 (fresh reader) top1 | top10 | bits |
+|---|---|---|---|---|---|---|
+| s3 | 0.525 | 0.914 | 6.10 | 0.389 | 0.850 | 5.48 |
+| s3_noaug | 0.447 | 0.888 | 5.94 | 0.361 | 0.817 | 5.37 |
+| random_m | 0.056 | 0.272 | 2.11 | 0.049 | 0.228 | 1.79 |
+
+- Samples (s3): varied colour fields, black shapes on white, stripes, textures, gestural marks; a few near-blank white images.
+
+Conclusion: the jointly trained mapper and reader invent a code in which the test track is named from its image alone in 78 % of cases (chance 0.13 %; untrained mapper 14 %), at FD 426, close to the generator's own samples (388). The code survives the training augmentation (86 %) and a different 10 s window of the track (40 to 46 %). Without augmentation the code is read better from clean images but breaks under the augmentation (86 to 65 %), so the augmentation makes it robust without removing it. A fresh reader on DINO v1, an encoder the game never saw, recovers 52 % (untrained mapper 6 %), so the code is carried by visual content that another self-supervised encoder also sees, not only by DINOv2-specific patterns; the augmented run transfers better (52 % against 45 %). Distance structure is weak (r 0.18): S3 makes tracks distinguishable, not similar tracks similar. One seed.
