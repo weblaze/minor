@@ -40,9 +40,9 @@ def run_name(stem, smoke):
 class Reader(nn.Module):
     """Both sides of the contrastive game: images (DINOv2 features) and audio codes into one unit sphere."""
 
-    def __init__(self, audio_dim, embed_dim, hidden):
+    def __init__(self, audio_dim, embed_dim, hidden, image_dim=DINO_DIM):
         super().__init__()
-        self.image = Mapper(DINO_DIM, embed_dim, hidden, 2)
+        self.image = Mapper(image_dim, embed_dim, hidden, 2)
         self.audio = Mapper(audio_dim, embed_dim, hidden, 2)
 
     def embed_images(self, features):
