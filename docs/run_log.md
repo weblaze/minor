@@ -949,3 +949,264 @@ Conclusion: the R1 variant is the working G-GAN configuration. It is under-train
 - Checked locally: smoke pipeline (`scripts/smoke.py --methods s4`) passes; the real checkpoint loads and embeds paintings on the CPU. Not checked locally: the filterbank path (`torchaudio` is not installed on the laptop).
 - Launched: `abstraction-s4-probe` version 1 (extraction of all tracks and paintings, then the probe without `--assignments`). D-S4 on the F1 assignments is run locally from the fetched embeddings.
 - Results to follow.
+
+## 2026-11-18 — G-GAN R1 with mixed precision (Kaggle): three times faster, FD 492 at 29264 steps
+
+- Code: `pipeline` d9801ba; job `abstraction-gan-r1` version 1 (`scripts/kaggle/jobs/gan_r1.yaml`); runs `gan_r1amp_seed0_20261115T203214Z` (GPU 0, `--amp`), `gan_r1_seed0_20261115T203214Z` (GPU 1, float32). R1 penalty 10, no spectral normalisation, width 64, batch 64, seed 0, 6 h limit. Output: `runs/kaggle/abstraction-gan-r1/runs/`. Both runs stopped at the time limit; return code 0.
+- Mixed precision: no non-finite loss in 29264 steps; 0.74 s per step against 2.19 s in float32 (factor 2.96). FD at equal steps is within the spread of the float32 runs (one seed each).
+
+| Run | Steps | FD at 5000 | FD at 10000 | FD at 15000 | FD at 20000 | FD at 25000 | Last FD (step) | Kernel distance, last |
+|---|---|---|---|---|---|---|---|---|
+| R1, mixed precision | 29264 | 860.1 | 807.5 | 727.2 | 654.9 | 515.6 | 492.3 (29264) | 10.4 |
+| R1, float32 (this job) | 9862 | 911.4 | | | | | 817.9 (9862) | 21.7 |
+| R1, float32 (2026-11-16 entry) | 13651 | 940.7 | 787.0 | | | | 682.0 (13651) | 16.3 |
+
+- FD falls at every evaluation; the fall between 25000 and 29264 is smaller (515.6 to 492.3) than between 20000 and 25000 (654.9 to 515.6). Discriminator loss rises from about 2.0 to 3.4 (5.3 in the last logged step) with `d_real` above `d_fake` throughout the second half.
+- Samples at step 29264: larger coloured shapes on light or orange grounds, scribble and lattice textures, stripes, framed rectangles; a share of near-uniform tiles (light grey, orange) remains; fewer grid artefacts than at 13651.
+- Reference Frechet distances: training art 113.3, Q1 VAE reconstructions 208.5, Q1 mapper outputs 402 to 425, Q1 VAE prior samples 685.2 to 1261.4. The generator at 29264 is below every VAE prior and above the Q1 mapper outputs.
+- `checkpoint.pt` of both runs holds generator, discriminator, averaged generator, optimisers, scalers and step (29264 for the mixed-precision run), so either run can be continued with `--resume`.
+
+Conclusion: mixed precision is usable for G-GAN and is the setting for further runs. The R1 generator is still improving at 29264 steps. One seed.
+
+## 2026-11-18 — S4 probe (Kaggle): CAV-MAE embeddings of all tracks and paintings
+
+- Code: `pipeline` 1c56ab2; job `abstraction-s4-probe` version 1; runs `s4_extract_seed42_20261115T204546Z` (15 min on a T4), `s4_eval_probe_seed42_20261115T210034Z` (15 min). Embeddings: `runs/kaggle/abstraction-s4-probe/cav_mae_embeddings/` (7994 tracks, 3 windows each; 5832 paintings; 768 dimensions). Six tracks skipped (three too short, three not decodable), the same count as the MERT extraction.
+- Agreement with the encoders of phase 1 (test split; Mantel 9999 permutations, all p = 0.0001):
+
+| CAV-MAE against | n | Mantel r (Pearson) | Mantel rho | kNN overlap (k 10; chance) | Trustworthiness |
+|---|---|---|---|---|---|
+| MERT, mean code | 789 tracks | 0.324 | 0.328 | 0.154 (0.013) | 0.818 |
+| MERT, standardised code | 789 tracks | 0.364 | 0.343 | 0.206 (0.013) | 0.871 |
+| DINOv2 | 595 paintings | 0.562 | 0.556 | 0.228 (0.017) | 0.871 |
+
+- Track-painting cosine similarity S (all 7994 x 5832 pairs): mean 0.187, standard deviation 0.088, range -0.291 to 0.628. Mean similarity within tracks 0.418, within paintings 0.520; cosine of the two centroids 0.400. Variance shares of S: track 0.473, painting 0.244, track-painting interaction 0.282. Interaction rows of S computed from window 1 and window 2 of the same test track correlate at 0.809; of different tracks at 0.005.
+- S4 as a retrieval bridge without training (each test track receives the training painting with the highest S; scored with the standardised MERT code against DINOv2 features of the assigned paintings):
+
+| Assignment | Mantel r | kNN overlap | Trustworthiness | FD | Distinct paintings | Largest share |
+|---|---|---|---|---|---|---|
+| raw S | 0.080 | 0.066 | 0.677 | 633.0 | 222 | 0.075 |
+| S standardised per painting over training tracks | 0.060 | 0.047 | 0.619 | 402.9 | 444 | 0.032 |
+
+- For comparison, on the same measure (standardised code, seed 0, 2026-11-13 entry): F1 `f1` painting output 0.578, `f0` 0.303, `shuffled` 0.279, untrained random mapping 0.066.
+
+Conclusion: CAV-MAE orders tracks partly as MERT does (r 0.32 to 0.36) and paintings substantially as DINOv2 does (0.56). Its track-painting similarity has a pair-specific part (28 % of the variance) that is a stable property of the track (window agreement 0.81 against 0.005). Used directly as a bridge, that similarity carries little of the MERT distance structure into the paintings (r 0.06 to 0.08). Whether it prefers one orientation of the F1 mappings (D-S4) is tested in a separate entry.
+## 2026-11-18 — MERT model revision of the feature extraction
+
+- The extraction job `abstraction-features` loaded `m-a-p/MERT-v1-95M` at revision `main` (`mert.revision: null` in `configs/base.yaml`) on 2026-11-09. The commit history of the model repository on huggingface.co (checked 2026-11-18) has no commit after 2025-05-25; `main` was therefore commit `12af15fef9d0ac838c3f475bfbbf26d2060dd4f5` ("Update configuration_MERT.py", 2025-05-25) at the time of the extraction. Hidden states were read through forward hooks (`hidden-state route: hooks` in `logs/07.log` of the job).
+- Resolves the item "MERT model revision (commit hash) used for extraction" in `docs/paper1/missing.md`, section 3.
+
+## 2026-11-19 — D-S4: CAV-MAE scores the orientations of 100 F1 mappings (local)
+
+- Code: `pipeline` 57ecf3e (`methods/f1/orientation.py --save-assignments`, `methods/s4/d_s4.py`); the orientation runs started with the same code uncommitted (`git_dirty` true in their meta.json), committed unchanged as 57ecf3e. GTX 1650. Runs `f1_orientation_dS4mean_seed0_20261118T170617Z`, `f1_orientation_dS4std_seed0_20261118T180444Z` (configuration `swd`, seeds 0 to 49, 4000 steps; the same configuration as the D-vote runs of 2026-11-14), `s4_d_s4_seed42_20261118T191133Z`, `s4_eval_probe_seed42_20261118T191146Z`. CAV-MAE embeddings from `abstraction-s4-probe`.
+- Score per seed: mean CAV-MAE similarity of the 789 assigned test track-painting pairs, as z against 999 random re-assignments of the same paintings to the same tracks (track and painting main effects cancel). Seeds are split by the sign of the axis correlation (orientation); p from 9999 permutations of the seed labels.
+
+| Code | Axis | Seeds positive / negative | Mean z, positive | Mean z, negative | p | Spearman (corr, z) |
+|---|---|---|---|---|---|---|
+| mean | 1 | 10 / 40 | -1.40 | 1.32 | 0.001 | -0.45 |
+| mean | 2 | 24 / 26 | 0.28 | 1.23 | 0.16 | -0.34 |
+| mean | 3 | 43 / 7 | 0.66 | 1.50 | 0.39 | -0.07 |
+| standardised | 1 | 34 / 16 | 1.34 | -1.26 | 0.002 | 0.45 |
+| standardised | 2 | 24 / 26 | 0.04 | 0.93 | 0.27 | -0.22 |
+| standardised | 3 | 26 / 24 | 0.09 | 0.95 | 0.28 | -0.11 |
+
+- Seeds with p < 0.05 against re-assignment: 21 of 50 (mean code), 16 of 50 (standardised). Mean z 0.77 (sd 2.32) and 0.50 (sd 2.79).
+- z does not follow mapping quality: Spearman with painting r -0.04 (mean) and 0.27 (standardised), with the number of distinct paintings -0.14 and -0.02; painting r of the two orientation groups 0.643 / 0.647 (mean) and 0.558 / 0.550 (standardised). After regressing z on painting r and distinct paintings, the axis-1 difference remains (-2.78, p 0.0004; 1.87, p 0.020).
+- Single F1 evaluations of 2026-11-12 (standardised code, seed 0), same score (raw S; S standardised per painting): `f1` z 4.66 (p 0.001); 5.55; `f0` 1.74 (0.043); 2.42; `shuffled` 1.13 (0.128); 1.51; untrained random mapping 1.38 (0.082); 1.07.
+
+Conclusion: on both codes CAV-MAE scores the axis-1 orientation chosen by the majority of seeds (D-vote: 40/50 negative on the mean code, 34/50 positive on the standardised code) above the minority orientation, and the difference is not explained by mapping quality. D-vote and D-S4 agree on axis 1 for both codes; neither test separates the orientations of axes 2 and 3. The trained F1 assignment scores above its controls. The axis signs are defined per code (principal axes of each code), so the two codes are not compared by sign.
+
+## 2026-11-19 — S2: blind matching by Gromov-Wasserstein (local)
+
+- Code: `pipeline` 21f22ac (`methods/s2/match.py`; entropic GW in PyTorch, square loss, cosine distances divided by their mean, regularisation annealed from 0.05 to 0.0005 by a factor 0.95 per step, 300 steps, 200 Sinkhorn iterations; 10 restarts from random couplings, the lowest objective selected). Orientations recomputed with the axis convention of `methods/f1/orientation.py` by `analysis/exploratory/s2_orientation.py` (5a1d829; the run itself used an SVD convention, fixed for later runs in a677747). GTX 1650. Run `s2_eval_match_seed42_20261118T172954Z`, 50 min per code. D-S4 on the restarts: `s4_d_s4_seed42_20261118T191603Z`.
+- Problem: the 789 test tracks (audio code, mean over windows) against the 4666 training paintings (DINOv2), no pairs, nothing trained. Solved on the test tracks themselves: the assignment uses the distances among the test tracks, unlike F1, whose mapping is trained on the training tracks.
+- Settings chosen before the run on the mean code with single solves: without annealing at 0.01 the coupling was nearly uniform (mean share of a track's mass on its largest painting 0.003); at 0.0005 with annealing it is 0.156, close to the limit set by the uniform marginals, with the lowest objective (0.0570 against 0.0742).
+
+| Code | GW (selected) | Gaussian reference, mean (sd) | Same-space reference | Mantel r | rho | kNN | Trustworthiness | FD | Kernel distance | Distinct paintings |
+|---|---|---|---|---|---|---|---|---|---|---|
+| mean | 0.0570 | 0.0692 (0.0013) | 0.0269 | 0.809 | 0.832 | 0.158 | 0.874 | 166.4 | -0.02 | 789 |
+| standardised | 0.0329 | 0.0253 (0.0003) | 0.0153 | 0.532 | 0.519 | 0.148 | 0.876 | 163.6 | -0.06 | 789 |
+
+- References (5 draws, best of 2 restarts each, against the best of the first 2 restarts of the real match): `gaussian`, as many samples of a Gaussian with the mean and covariance of the painting features as there are paintings; same-space, as many random training tracks. The mean code fits the art collection better than the Gaussian (z -9.2); the standardised code fits the Gaussian better than the art (z +28.4).
+- Restarts: all 10 objectives equal to four decimals; 91 % (mean) and 99 % (standardised) of tracks receive the same painting in two restarts; mean cosine of the two paintings 0.956 and 0.996 (random pairs 0.31). Coupling concentration 0.156 and 0.145.
+- Orientation (F1 axis convention), 10 restarts: mean code axis 1 negative in 10 (mean corr -0.885), axis 2 positive in 10 (0.774), axis 3 positive in 10 (0.395); standardised code axes 1, 2 and 3 positive in 10 (0.94, 0.65, 0.63). F1 D-vote for comparison (50 seeds): mean code 10/24/43 positive on axes 1/2/3; standardised 34/24/26.
+- D-S4 on the S2 assignments: mean z 0.00 (sd 0.25) on the mean code and 0.18 (sd 0.06) on the standardised code; no restart with p < 0.05.
+- For comparison (2026-11-13 and 2026-11-14 entries; F1 is trained on training tracks and evaluated on test tracks): F1 `f1` painting output, standardised code, seed 0: r 0.578, FD 342.8, 385 paintings; best mean-code recipes 0.737 to 0.747 with fewer than 400 paintings.
+
+Conclusion: matching shapes alone, without training, assigns each test track a different painting, keeps the audio distances at r 0.81 (mean code) and 0.53 (standardised code), and stays close to the art distribution (FD 164 to 166; training art 113). The solution does not depend on the initial coupling. Its axis-1 orientation is the one chosen by the majority of F1 seeds and preferred by CAV-MAE, on both codes; on the mean code its axis 3 also matches the F1 majority. CAV-MAE does not score the S2 pairs above random re-assignment, unlike the trained F1 pairs. Whether the mean-code result holds out of sample (matching training tracks, then placing test tracks) is not tested. One run per code.
+
+## 2026-11-19 — G-GAN R1 continued to 57568 steps, and a second seed (Kaggle): FD 388
+
+- Code: `pipeline` c5a7670; job `abstraction-gan-r1-resume` version 1 (`scripts/kaggle/jobs/gan_r1_resume.yaml`); runs `gan_r1amp_seed0_20261118T171246Z` (GPU 0, continued with `--resume` from `gan_r1amp_seed0_20261115T203214Z/checkpoint.pt` at step 29264) and `gan_r1amp_seed1_20261118T171246Z` (GPU 1, seed 1, from scratch). Both mixed precision, R1 penalty 10, width 64, batch 64, 5.5 h limit; both stopped at the limit. `git_dirty` true in meta.json (the Kaggle copy of the repository). Output: `runs/kaggle/abstraction-gan-r1-resume/runs/`.
+- Speed with both GPUs busy: 0.70 s per step (seed 0, 28304 steps) and 0.75 s per step (seed 1, 26364 steps).
+
+| Run | FD by step | Last FD (step) | Kernel distance, last |
+|---|---|---|---|
+| seed 0, continued | 522.9 (30000), 424.3 (35000), 489.9 (40000), 527.8 (45000), 406.8 (50000), 406.2 (55000) | 388.2 (57568) | 7.17 |
+| seed 1, new | 958.2 (5000), 740.9 (10000), 620.3 (15000), 566.9 (20000), 515.8 (25000) | 546.2 (26364) | 12.75 |
+
+- Seed 0 no longer falls at every evaluation: FD rises from 424 to 528 between 35000 and 45000, then falls to 388. The first evaluation after resuming (522.9 at 30000) is above the last one before it (492.3 at 29264).
+- Seed 1 follows seed 0 of the first job closely (860, 808, 727, 655, 516 at 5000 to 25000).
+- Samples of seed 0 at 57568: colour fields, blobs on light or orange grounds, scribble and crumpled textures, framed rectangles; about one tile in eight is still near uniform (light grey or off-white).
+- Reference Frechet distances: training art 113.3, Q1 VAE reconstructions 208.5, Q1 mapper outputs 402 to 425, Q1 VAE prior samples 685.2 to 1261.4. Seed 0 at 57568 is below the Q1 mapper outputs for the first time.
+- `checkpoint.pt` of both runs can be continued with `--resume`.
+
+Conclusion: the R1 generator keeps improving with more steps but no longer at every evaluation; FD 388 at 57568 steps (seed 0). A second seed reproduces the first 25000 steps of seed 0. `generator.pt` of seed 0 at 57568 is the current candidate for the GAN bridge.
+
+## 2026-11-19 — S2 out of sample: match training tracks, place test tracks (local)
+
+- Code: `pipeline` 30ec60c (`methods/s2/oos.py`, section `oos` of `methods/s2/config.yaml`); the run started with the same code uncommitted. GTX 1650. Run `s2_eval_oos_seed42_20261119T102209Z`, 17 to 19 min per code.
+- Method: entropic GW (settings of `match.py`) between 3000 random training tracks (audio code, mean over windows) and the 4666 training paintings; 3 restarts, the lowest objective selected. Each matched track gets a barycentric target (coupling-weighted mean of painting features). A test track is placed from its audio code alone, by `knn` (mean target of its 10 nearest matched tracks, cosine) or `linear` (ridge from audio code to target, strength 1.0 relative to the mean variance), and receives the nearest training painting (cosine). The test tracks take no part in the match. Control `shuffled`: the same placements from a random one-to-one pairing of matched tracks and paintings.
+
+| Code | Placement | Mantel r | rho | kNN | FD | Distinct paintings | Largest share |
+|---|---|---|---|---|---|---|---|
+| mean | gw, knn | 0.611 | 0.611 | 0.118 | 489.0 | 247 | 0.049 |
+| mean | gw, linear | 0.718 | 0.711 | 0.131 | 447.7 | 254 | 0.047 |
+| mean | shuffled, knn | -0.011 | -0.013 | 0.023 | 734.1 | 165 | 0.238 |
+| mean | shuffled, linear | 0.202 | 0.213 | 0.013 | 1701.8 | 26 | 0.929 |
+| standardised | gw, knn | 0.531 | 0.522 | 0.165 | 398.5 | 306 | 0.032 |
+| standardised | gw, linear | 0.528 | 0.529 | 0.148 | 406.1 | 276 | 0.029 |
+| standardised | shuffled, knn | 0.017 | 0.011 | 0.025 | 746.1 | 169 | 0.231 |
+| standardised | shuffled, linear | 0.025 | 0.022 | 0.019 | 1544.5 | 38 | 0.835 |
+
+- Restarts: objectives equal (0.0498 mean code, 0.0317 standardised); 99 % of test tracks receive the same painting in two restarts.
+- Orientation of the knn placement (F1 axis convention), 3 restarts: mean code axes 1/2/3 negative/positive/positive in 3 of 3 (corr -0.90, 0.82, 0.64), as in the transductive S2 run and the D-vote majority on axis 1; standardised code positive/positive/negative (0.88, 0.28, -0.14): axes 1 and 2 as in the transductive run, axis 3 reversed.
+- Comparison: transductive S2 (2026-11-19 entry) mean code r 0.809, FD 166.4, 789 distinct; standardised 0.532, FD 163.6, 789. F1 five-seed best mean-code recipes 0.737 to 0.747 with fewer than 400 paintings; F1 `f1` standardised seed 0: 0.578, FD 342.8, 385.
+
+Conclusion: the S2 structure holds out of sample. On the mean code, matching training tracks by shape and placing test tracks with a linear map gives Mantel r 0.718 (transductive 0.809; shuffled control 0.20); on the standardised code 0.53, equal to the transductive value. What does not carry over is the spread over paintings: placing tracks one at a time and taking the nearest painting gives 250 to 300 distinct paintings and FD 400 to 490, against 789 and FD 164 to 166 when all test tracks are matched jointly. One run per code; subset of 3000 training tracks.
+
+## 2026-11-19 — Human judging pilot: first 4 judges; Arunav's marks on the image atlas
+
+- Judging page (https://claude.ai/artifact/FqBet4gUoTsJdZGyM7YK5o, `scripts/judging/`): 4 sessions, 124 answers (one session stored directly, three imported from answer codes). Median 8.9 s per answer. Systems: S1 (`s1_eval_s1_judging`), Q1 (`q1_eval_q1_judging`, mean code), F1 (`f1_eval_f1`, standardised code, painting output); 24 test tracks.
+- Match trials (hear one track, pick its image from two; chance 0.5; one-sided binomial p): S1 8/20 (0.40, p 0.87), Q1 12/20 (0.60, p 0.25), F1 10/20 (0.50, p 0.59); all 30/60 (p 0.55).
+- Triplet trials (pair chosen as most alike from the audio, against the pair chosen from the three images of the same tracks; chance 1/3): S1 6/16 (p 0.45), Q1 7/16 (p 0.26), F1 5/16 (p 0.66).
+- With 20 match trials per system only accuracies of about 0.70 or more reach p < 0.05; about 150 to 200 answers per system are needed to detect 0.58.
+- Image atlas (https://claude.ai/artifact/SatUpkFo4tkVeL5NURDZ7a): every non-smoke image grid of the runs, 38 cards; Arunav marked 31 (art / partly / blobs and greys). Art: G-GAN R1 mixed precision seed 0 (to 57568 steps) and seed 1. Partly: G-GAN R1 float32 runs (v2, v3), Q1 standardised code. Blobs and greys: every S1 grid and control, Q1 mean code seeds 0 to 2, Q1 whitened code, Q1 controls, all VAE prior and reconstruction grids, Q1 PCA-alignment baselines (his note: the retrieval view is art), G-GAN v1 and spectral-norm runs. F1 and S2 (real paintings) not marked.
+
+Conclusion: in this pilot, judges do not match tracks to their images above chance for any system; the pilot can only exclude large effects. By eye, every image generated through the VAE is judged blobs and greys, and the R1 GAN is the only generator judged art.
+
+## 2026-11-19 — S2 out of sample with joint assignment of the placed test tracks (local)
+
+- Code: `pipeline` (commit after 30ec60c: `joint()` in `methods/s2/oos.py`). Run `s2_eval_oos_seed42_20261119T110951Z`, one GW restart per code (the three restarts of the previous run had equal objectives and gave 99 % the same paintings); otherwise the settings of the previous entry. The match itself is identical (GW 0.0498 and 0.0317; non-joint values reproduce the previous run within 0.005).
+- `_joint`: all 789 placed test tracks are assigned to the 4666 training paintings together, each painting at most once, maximising the summed cosine similarity between placed feature and painting (Hungarian algorithm). The step uses the placed features only, not the distances among the test tracks; it does use the test tracks as one batch.
+
+| Code | Placement | Mantel r | kNN | FD | Distinct | Orientation corr (axes 1/2/3) |
+|---|---|---|---|---|---|---|
+| mean | gw, linear, joint | 0.710 | 0.134 | 224.7 | 789 | -0.91 / 0.86 / 0.73 |
+| mean | gw, knn, joint | 0.632 | 0.122 | 243.5 | 789 | -0.91 / 0.83 / 0.71 |
+| mean | shuffled, linear, joint | 0.132 | 0.030 | 295.4 | 789 | |
+| mean | shuffled, knn, joint | 0.033 | 0.021 | 260.8 | 789 | |
+| standardised | gw, linear, joint | 0.548 | 0.141 | 218.2 | 789 | 0.90 / 0.28 / -0.17 |
+| standardised | gw, knn, joint | 0.520 | 0.147 | 220.7 | 789 | 0.89 / 0.27 / -0.14 |
+| standardised | shuffled, linear, joint | 0.078 | 0.026 | 296.6 | 789 | |
+| standardised | shuffled, knn, joint | 0.013 | 0.023 | 274.3 | 789 | |
+
+- Without the joint step (same run): mean code linear 0.717, FD 445.5, 256 distinct; standardised linear 0.527, FD 406.5, 275 distinct.
+- Comparison: F1 five-seed best mean-code recipes 0.737 to 0.747 (FD about 340, fewer than 400 paintings); F1 lowest-FD recipe (pca64 + energy) r 0.61, FD 234, 555 paintings; transductive S2 0.809, FD 166.4, 789.
+
+Conclusion: assigning the placed test tracks jointly removes the crowding without losing structure: out of sample, S2 on the mean code gives every test track a different painting with Mantel r 0.710 and FD 225, against 0.717, FD 446 and 256 paintings with nearest-painting retrieval. Shuffled controls stay at or below 0.13. This is the best combination of structure, realism and variety among the out-of-sample methods so far; it needs no pairs and no trained network beyond a ridge map. One GW restart per code, one subset of 3000 training tracks.
+
+## 2026-11-19 — S2 out of sample against a pool of G-GAN images (local)
+
+- Code: `pipeline` 33ba3c8 (`methods/s2/gan_pool.py`; `--gallery` in `methods/s2/oos.py`). GTX 1650.
+- Pool `runs/gan_pool_r1amp_seed0_57568/`: 6000 images from `gan_r1amp_seed0_20261118T171246Z/generator.pt` (step 57568, averaged generator), latents N(0, I), seed 0. Near-blank images dropped: grey standard deviation below 0.06, or below 0.10 with mean saturation below 0.08 (thresholds set by inspecting 64 samples sorted by grey standard deviation; plain saturated colour fields are kept). Kept 5372 (89.5 %). The same rule would drop 5.5 % of the training paintings (near-empty minimal canvases). DINOv2 features of the kept images.
+- Run `s2_eval_oos_pool_seed42_20261119T123740Z`: as the joint-assignment entry above (3000 training tracks, one GW restart, knn and linear placement, nearest or joint assignment), with the GAN pool as the gallery in place of the 4666 training paintings. FD against the held-out paintings. Orientation corr here uses the principal axes of the pool, so axes 2 and 3 are not comparable with the painting runs.
+
+| Code | Placement | Mantel r | FD | Distinct images |
+|---|---|---|---|---|
+| mean | gw, linear, joint | 0.672 | 487.2 | 789 |
+| mean | gw, knn, joint | 0.617 | 497.8 | 789 |
+| mean | gw, linear (nearest) | 0.665 | 706.7 | 251 |
+| mean | shuffled, linear, joint | 0.106 | 528.6 | 789 |
+| mean | shuffled, knn, joint | -0.007 | 506.0 | 789 |
+| standardised | gw, linear, joint | 0.583 | 479.9 | 789 |
+| standardised | gw, knn, joint | 0.570 | 487.5 | 789 |
+| standardised | shuffled, linear, joint | 0.089 | 528.0 | 789 |
+
+- GW objective 0.0496 (mean code; paintings 0.0498) and 0.0312 (standardised; paintings 0.0317): the music matches the shape of the GAN pool as well as that of the paintings. Axis-1 corr -0.92 (mean code) and 0.88 (standardised), the same signs as with the paintings.
+- Reference FDs: generator at step 57568, random samples 388.2 (2026-11-19 GAN entry); training art 113.3; Q1 mapper outputs 402 to 425; S2 joint with real paintings 218 to 225.
+
+Conclusion: matched against generated images instead of real paintings, out-of-sample S2 with joint assignment gives every test track its own new image and keeps Mantel r 0.672 (mean code) and 0.583 (standardised, above the 0.548 with paintings); shuffled controls stay at or below 0.11. FD 480 to 490 is above the generator's own random samples (388), so the selected subset is less art-like than a random draw of the pool. First result in the project where generated images judged art-like by Arunav are assigned to music by a structure-preserving method. One run per code; no human evaluation yet.
+
+
+## 2026-11-21 — B-cluster and B-anchor on S2 out of sample (local)
+
+- Code: `pipeline` 5ad1a6e (`methods/s2/cluster.py`, `methods/s2/anchor.py`). GTX 1650. 3000 matched training tracks, test 789, gallery 4666 training paintings, joint assignment.
+- B-cluster: k-means groups of the matched tracks and of the gallery, groups paired by GW between centroids (weighted by size, best of 50 restarts) and the Hungarian algorithm, GW inside each paired group, then placement and joint assignment. Control: random pairing of groups. Mantel r, linear placement:
+
+| Code | K | Paired by GW | Random pairing |
+|---|---|---|---|
+| mean | 8 | 0.486 | 0.427 |
+| mean | 16 | 0.530 | 0.352 |
+| mean | 32 | 0.567 | 0.294 |
+| standardised | 8 | 0.449 | 0.339 |
+| standardised | 16 | 0.455 | 0.230 |
+| standardised | 32 | 0.473 | 0.243 |
+
+- Reference: flat S2 out of sample 0.710 (mean), 0.548 (standardised). Shuffled 0.16 and 0.08. FD 231 to 245.
+- B-anchor: for each of the 8 sign patterns of the top-3 axes, GW started from the transport plan of the oriented linear cost. All 8 starts end at the same coupling (GW 0.0498 mean, 0.0320 standardised; same train corr, test r 0.709 to 0.711 and 0.548 to 0.551). The start at epsilon 0.05 erases the initial orientation, so there are no distinct candidates for the judge. Judge z differences between candidates are noise (train/test z corr -0.90 on mean).
+
+Conclusion: B-cluster lowers structure at every K on both codes; group pairing by shape carries information (above random pairing, gap growing with K) but less than the flat match. B-anchor as built does not produce alternatives: a smaller starting epsilon or a fused orientation term is needed before the judge can choose.
+
+## 2026-11-21 — B-anchor and B-cluster on F1 (local)
+
+- Code: `pipeline` 5ad1a6e (`methods/f1/b_tasks.py`). 20 seeds of F1 config `swd` per code. Runs `f1_b_tasks_seed0_20261121T110306Z` (mean), `f1_b_tasks_seed0_20261121T113719Z` (standardised).
+- B-anchor: CAV-MAE judge z of each seed on the validation tracks; anchored seed = highest validation z.
+
+| Code | val/test judge z corr | anchored: test r, z | lowest val SWD: r, z | mean of seeds: r, z | axis-1 majority |
+|---|---|---|---|---|---|
+| mean | 0.88 | 0.624, 3.67 | 0.664, 1.64 | 0.646, 1.02 | 16/20 negative; anchored negative |
+| standardised | 0.88 | 0.556, 4.85 | 0.573, 5.00 | 0.556, 1.36 | 14/20 positive; anchored positive |
+
+- B-cluster: test tracks restricted to the paintings of the GW-paired group. Mean of 20 seeds, Mantel r: mean code K 8 0.515 (random groups 0.407), K 16 0.472 (0.440); standardised K 8 0.428 (0.406), K 16 0.399 (0.300). Judge z in this arm varies from -0.9 to 2.8 without pattern.
+
+Conclusion: the machine judge's choice of seed carries over to held-out tracks (corr 0.88) and picks the axis-1 majority orientation on both codes, at about the mean structure; axes 2 and 3 stay unfixed. B-cluster lowers structure on F1 as on S2.
+
+## 2026-11-21 — S1 with the G-GAN bridge (Kaggle)
+
+- Job `abstraction-gan-bridge-s1`, `pipeline` 8bd0ce9. Generator `gan_r1amp_seed0_20261118T171246Z`, prior N(0, I) as latent reference. 20000 steps, seed 0, T4. Final val l_dist 0.115, l_struct 0.245.
+
+| Variant | Mantel r | FD (held-out art) | Participation ratio |
+|---|---|---|---|
+| s1 | 0.755 | 1210.3 | 11.6 |
+| shuffled | 0.108 | 866.6 | 21.4 |
+| random M | 0.046 | 645.2 | 26.2 |
+
+- Reference: training art FD 113.3; generator random samples 388.2; held-out art participation ratio 44.8.
+- Samples: most test tracks map to one family of red-orange horizontal stripe images; a few outliers (white with black shapes, yellow bars, textured fields).
+
+Conclusion: S1 through the GAN preserves structure strongly (r 0.755) but collapses most tracks onto one image family; FD 1210 is far above random generator samples. The latent distribution term does not keep the mapper inside the varied part of the GAN's input space. Needs a stronger latent term or a feature distribution term before it is usable.
+
+## 2026-11-21 — Q1 with the G-GAN bridge (Kaggle)
+
+- Job `abstraction-gan-bridge-q1`, `pipeline` 8bd0ce9. Generator `gan_r1amp_seed0_20261118T171246Z`, L_lat against N(0, I), mean code, seed 0, 20000 steps, T4.
+
+| Variant | Mantel r | kNN overlap (chance 0.013) | FD (held-out art) |
+|---|---|---|---|
+| q1 | 0.537 | 0.108 | 458.2 |
+| shuffled | 0.040 | 0.057 | 427.5 |
+| random M | 0.046 | 0.025 | 645.2 |
+
+- Reference: generator random samples 388.2; Q1 through the VAE 402 to 425; S1 through the GAN 0.755 / 1210.
+- Samples: varied (stripes, colour fields, black shapes on white, textures, red and teal compositions); a red-teal family recurs but there is no collapse.
+
+Conclusion: Q1 through the GAN keeps structure (r 0.54, shuffled 0.04) with varied, art-like images at FD 458, near the generator's own samples. With the feature-space realism term the GAN bridge does not collapse, unlike S1 (which has only the latent term). Best generated-image bridge so far by eye; one seed.
+
+## 2026-11-21 — S2 B-anchor, fixed (local)
+
+- Code: `pipeline` 1030cc4 (`methods/s2/anchor.py`: start epsilon 0.005 instead of 0.05; optional fused GW with the oriented linear cost, weight alpha; `methods/s2/common.py`: `feature_cost`, `alpha`). GTX 1650. 3000 matched training tracks, gallery 4666, test 789, ridge placement, joint assignment. 8 sign patterns of the top-3 axes for alpha 0 and alpha 0.1. Log `b_anchor2.log`.
+- The starts now survive: alpha 0 ends in distinct couplings (axis-1 train corr +0.85 or -0.91 on the mean code); alpha 0.1 holds every pattern (|corr| 0.88 to 0.98 on all three axes).
+- Judge z on the training tracks carries over to the test tracks: corr over the 8 candidates 0.94 (mean, alpha 0), 0.86 (mean, 0.1), 0.85 (standardised, both).
+
+| Code | alpha | Anchored (highest train z) | train z | test r | test z | Lowest GW | Range of test r |
+|---|---|---|---|---|---|---|---|
+| mean | 0 | (-1, -1, -1) | 8.74 | 0.694 | 1.89 | same | 0.679 to 0.710 |
+| mean | 0.1 | (-1, -1, +1) | 8.01 | 0.668 | 4.07 | same | 0.490 to 0.671 |
+| standardised | 0 | (+1, -1, -1) | 10.27 | 0.552 | 5.42 | (+1, -1, +1) | 0.538 to 0.559 |
+| standardised | 0.1 | (+1, -1, -1) | 7.19 | 0.542 | 6.47 | (+1, +1, +1) | 0.542 to 0.558 |
+
+- Signs are those of the start; the train corr of the result has the same signs except where alpha 0 lets axis 3 drift.
+- Axis 1: mean train z of the 8 candidates with axis 1 negative against the 8 with axis 1 positive: 4.46 against -2.75 (mean code), -0.96 against 5.28 (standardised). The judge's axis-1 choice is the same as the shape-only (lowest GW) choice, the F1 seed majority and D-S4 for both codes.
+- Axis 2: the anchored candidate has axis 2 negative in all four settings.
+- Cost of anchoring in structure against flat S2 out of sample (0.710 mean, 0.548 standardised): 0.016 at alpha 0 and 0.042 at alpha 0.1 on the mean code; none on the standardised code. With alpha 0.1, forcing axis 3 negative on the mean code lowers r to 0.49 to 0.55.
+
+Conclusion: with a lower start epsilon the oriented starts give real alternatives, and the CAV-MAE judge chooses among them consistently: its choice on training tracks predicts the test tracks (corr 0.85 to 0.94), agrees with shape matching and the earlier machine judges on axis 1, and adds a consistent choice for axis 2 (negative on both codes). At alpha 0 the anchored S2 match keeps the structure of flat S2 within 0.02. One subset of training tracks, one run per setting.
