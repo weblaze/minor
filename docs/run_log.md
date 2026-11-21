@@ -1175,3 +1175,18 @@ Conclusion: the machine judge's choice of seed carries over to held-out tracks (
 - Samples: most test tracks map to one family of red-orange horizontal stripe images; a few outliers (white with black shapes, yellow bars, textured fields).
 
 Conclusion: S1 through the GAN preserves structure strongly (r 0.755) but collapses most tracks onto one image family; FD 1210 is far above random generator samples. The latent distribution term does not keep the mapper inside the varied part of the GAN's input space. Needs a stronger latent term or a feature distribution term before it is usable.
+
+## 2026-11-21 — Q1 with the G-GAN bridge (Kaggle)
+
+- Job `abstraction-gan-bridge-q1`, `pipeline` 8bd0ce9. Generator `gan_r1amp_seed0_20261118T171246Z`, L_lat against N(0, I), mean code, seed 0, 20000 steps, T4.
+
+| Variant | Mantel r | kNN overlap (chance 0.013) | FD (held-out art) |
+|---|---|---|---|
+| q1 | 0.537 | 0.108 | 458.2 |
+| shuffled | 0.040 | 0.057 | 427.5 |
+| random M | 0.046 | 0.025 | 645.2 |
+
+- Reference: generator random samples 388.2; Q1 through the VAE 402 to 425; S1 through the GAN 0.755 / 1210.
+- Samples: varied (stripes, colour fields, black shapes on white, textures, red and teal compositions); a red-teal family recurs but there is no collapse.
+
+Conclusion: Q1 through the GAN keeps structure (r 0.54, shuffled 0.04) with varied, art-like images at FD 458, near the generator's own samples. With the feature-space realism term the GAN bridge does not collapse, unlike S1 (which has only the latent term). Best generated-image bridge so far by eye; one seed.
