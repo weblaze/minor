@@ -1,0 +1,19 @@
+description: >-
+  Continues both mixed-precision R1 G-GAN runs of abstraction-gan-r1-resume from their checkpoint.pt with the
+  flags of the original runs: GPU 0 seed 0 from step 57568, GPU 1 seed 1 from step 26364. Each stops at 150000
+  steps or after 9 hours.
+name: abstraction-gan-r1-resume2
+branch: pipeline
+kernels:
+  - "{user}/abstraction-features"
+  - "{user}/abstraction-gan-r1-resume"
+inputs:
+  ART_ZIP: abstract_art.zip
+  SEED0: gan_r1amp_seed0_20261118T171246Z
+  SEED1: gan_r1amp_seed1_20261118T171246Z
+setup:
+  - nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+  - python -m zipfile -e {ART_ZIP} datasets/
+chains:
+  - - gan train_gan --seed 0 --channels 64 --steps 150000 --no-spectral-norm --r1 10 --amp --tag r1amp --hours 9 --resume {SEED0}/checkpoint.pt
+  - - gan train_gan --seed 1 --channels 64 --steps 150000 --no-spectral-norm --r1 10 --amp --tag r1amp --hours 9 --resume {SEED1}/checkpoint.pt

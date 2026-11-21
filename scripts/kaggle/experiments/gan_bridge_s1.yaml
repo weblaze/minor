@@ -1,0 +1,23 @@
+description: >-
+  S1 with the G-GAN generator (gan_r1amp seed 0, step 57568, averaged generator) in place of the VAE; L_dist
+  against prior samples N(0, I). GPU 0 variant s1, GPU 1 variant shuffled and the random-M baseline. Seed 0,
+  20000 steps, evaluation on the test split with saved images.
+name: abstraction-gan-bridge-s1
+branch: pipeline
+kernels:
+  - "{user}/abstraction-features"
+  - "{user}/abstraction-gan-r1-resume"
+inputs:
+  MERT: mert_embeddings
+  ART_ZIP: abstract_art.zip
+  GAN: gan_r1amp_seed0_20261118T171246Z
+setup:
+  - nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+  - python -m zipfile -e {ART_ZIP} datasets/
+  - ln -s {MERT} datasets/mert_embeddings
+chains:
+  - - s1 train_mapper --generator gan --vae {GAN}/generator.pt --variant s1 --seed 0 --tag gan
+    - s1 evaluate --generator gan --vae {GAN}/generator.pt --seed 0 --tag gan --save-images --mapper runs/s1_mapper_s1_gan_seed0_*/mapper.pt
+  - - s1 train_mapper --generator gan --vae {GAN}/generator.pt --variant shuffled --seed 0 --tag gan
+    - s1 evaluate --generator gan --vae {GAN}/generator.pt --seed 0 --tag gan --save-images --mapper runs/s1_mapper_shuffled_gan_seed0_*/mapper.pt
+    - s1 evaluate --generator gan --vae {GAN}/generator.pt --seed 0 --tag ganrandom --save-images
