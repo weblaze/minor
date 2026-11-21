@@ -30,7 +30,7 @@ Set by the project owner on 2026-11-14 (second revision of that day). A bridge c
 
 ## Phase 1: S0, S1, Q1, F1, S2 with G-VAE
 
-Status 2026-11-16: steps 1 to 3 are done (run log entries of 2026-11-14 and 2026-11-15; `docs/paper1/`). A draft of the first paper exists (`docs/paper1/paper.md`). No S2 run has been made. Step 5 is not started.
+Status 2026-11-22: steps 1 to 3 are done (run log entries of 2026-11-14 and 2026-11-15; `docs/paper1/`). A draft of the first paper exists (`docs/paper1/paper.md`) and is parked until the project owner reopens it. S2 has been run transductively, out of sample with joint assignment, and against a pool of G-GAN images. Step 5: a human pilot ran on 2026-11-19 (4 judges, 124 answers, plus 31 imported answers on 2026-11-21); the full judgement waits for a shortlist of winning systems.
 
 Remaining steps:
 
@@ -44,9 +44,13 @@ Remaining steps:
 
 For each bridge: G-GAN first, then G-Diff and other diffusion or flow methods. The phase ends with a comparison of G-VAE, G-GAN and G-Diff, and with human judging.
 
+Status 2026-11-22: G-GAN trained in five runs (best FD 388). S4: probe, D-S4 and B-anchor use CAV-MAE as a judge; the S4 bridge through the G-GAN (`methods/s4/bridge.py`) is built and queued on Kaggle. S3 through the G-GAN (`methods/s3/`) has run on Kaggle. S1 and Q1 run through the G-GAN (Q1 varied and art-like; S1 collapses). G-Diff not started.
+
 ## Phase 2.5: B-anchor and B-cluster
 
 Applied to all methods available at that point.
+
+Status 2026-11-22: both tried on S2 (out of sample) and F1. B-cluster lowers structure on both. B-anchor: CAV-MAE's choice on training tracks carries over to test tracks (F1 seeds, corr 0.88; S2 orientations, 0.85 to 0.94). Not yet applied to S1, Q1, S3, S4 or the G-GAN bridges.
 
 ## Phase 3: S5, then S6, then B-time
 
