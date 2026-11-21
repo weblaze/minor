@@ -65,23 +65,27 @@ def sinkhorn_log(cost, log_p, log_q, eps, iterations):
     return torch.exp(k + f[:, None] + g[None, :])
 
 
-def gromov_wasserstein(d_a, d_b, eps, outer, inner, generator=None, tol=1e-7, eps_start=None, decay=0.95):
-    """Entropic Gromov-Wasserstein coupling between two metric spaces with uniform weights (square loss).
+def gromov_wasserstein(d_a, d_b, eps, outer, inner, generator=None, tol=1e-7, eps_start=None, decay=0.95,
+                       p=None, q=None, init=None):
+    """Entropic Gromov-Wasserstein coupling between two metric spaces (square loss), with uniform weights
+    unless the point weights `p`, `q` (each summing to 1) are given.
 
     Alternates the linearisation L(T) = const - 2 D_a T D_b with an entropic transport step
     (Peyre, Cuturi and Solomon, ICML 2016). The regularisation starts at `eps_start` (default `eps`) and is
     multiplied by `decay` at each step until it reaches `eps`; the stopping test applies only at `eps`.
     With `generator`, the first coupling is the transport plan of a random cost (a random restart);
-    otherwise the independent coupling p q^T.
+    otherwise the independent coupling p q^T. `init` gives the first coupling directly.
     Returns the coupling and the objective sum_ijkl (D_a[i,k] - D_b[j,l])^2 T_ij T_kl.
     """
     n, m = len(d_a), len(d_b)
     device = d_a.device
-    p = torch.full((n,), 1.0 / n, device=device, dtype=d_a.dtype)
-    q = torch.full((m,), 1.0 / m, device=device, dtype=d_a.dtype)
+    p = torch.full((n,), 1.0 / n, device=device, dtype=d_a.dtype) if p is None else p
+    q = torch.full((m,), 1.0 / m, device=device, dtype=d_a.dtype) if q is None else q
     log_p, log_q = p.log(), q.log()
     constant = (d_a ** 2 @ p)[:, None] + (d_b ** 2 @ q)[None, :]
-    if generator is None:
+    if init is not None:
+        coupling = init
+    elif generator is None:
         coupling = p[:, None] * q[None, :]
     else:
         noise = torch.rand(n, m, generator=generator).to(device=device, dtype=d_a.dtype)

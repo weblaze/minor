@@ -25,3 +25,7 @@ oos:                        # methods/s2/oos.py
   restarts: 3
   k: 10                     # nearest matched tracks per test track (knn placement)
   alpha: 1.0                # ridge strength, relative to the mean variance of the audio code (linear placement)
+
+cluster:                    # methods/s2/cluster.py (B-cluster)
+  k_values: [8, 16, 32]     # groups per collection
+  group_restarts: 50        # random restarts of the group-level match
