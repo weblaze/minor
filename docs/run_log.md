@@ -1190,3 +1190,23 @@ Conclusion: S1 through the GAN preserves structure strongly (r 0.755) but collap
 - Samples: varied (stripes, colour fields, black shapes on white, textures, red and teal compositions); a red-teal family recurs but there is no collapse.
 
 Conclusion: Q1 through the GAN keeps structure (r 0.54, shuffled 0.04) with varied, art-like images at FD 458, near the generator's own samples. With the feature-space realism term the GAN bridge does not collapse, unlike S1 (which has only the latent term). Best generated-image bridge so far by eye; one seed.
+
+## 2026-11-21 — S2 B-anchor, fixed (local)
+
+- Code: `pipeline` 1030cc4 (`methods/s2/anchor.py`: start epsilon 0.005 instead of 0.05; optional fused GW with the oriented linear cost, weight alpha; `methods/s2/common.py`: `feature_cost`, `alpha`). GTX 1650. 3000 matched training tracks, gallery 4666, test 789, ridge placement, joint assignment. 8 sign patterns of the top-3 axes for alpha 0 and alpha 0.1. Log `b_anchor2.log`.
+- The starts now survive: alpha 0 ends in distinct couplings (axis-1 train corr +0.85 or -0.91 on the mean code); alpha 0.1 holds every pattern (|corr| 0.88 to 0.98 on all three axes).
+- Judge z on the training tracks carries over to the test tracks: corr over the 8 candidates 0.94 (mean, alpha 0), 0.86 (mean, 0.1), 0.85 (standardised, both).
+
+| Code | alpha | Anchored (highest train z) | train z | test r | test z | Lowest GW | Range of test r |
+|---|---|---|---|---|---|---|---|
+| mean | 0 | (-1, -1, -1) | 8.74 | 0.694 | 1.89 | same | 0.679 to 0.710 |
+| mean | 0.1 | (-1, -1, +1) | 8.01 | 0.668 | 4.07 | same | 0.490 to 0.671 |
+| standardised | 0 | (+1, -1, -1) | 10.27 | 0.552 | 5.42 | (+1, -1, +1) | 0.538 to 0.559 |
+| standardised | 0.1 | (+1, -1, -1) | 7.19 | 0.542 | 6.47 | (+1, +1, +1) | 0.542 to 0.558 |
+
+- Signs are those of the start; the train corr of the result has the same signs except where alpha 0 lets axis 3 drift.
+- Axis 1: mean train z of the 8 candidates with axis 1 negative against the 8 with axis 1 positive: 4.46 against -2.75 (mean code), -0.96 against 5.28 (standardised). The judge's axis-1 choice is the same as the shape-only (lowest GW) choice, the F1 seed majority and D-S4 for both codes.
+- Axis 2: the anchored candidate has axis 2 negative in all four settings.
+- Cost of anchoring in structure against flat S2 out of sample (0.710 mean, 0.548 standardised): 0.016 at alpha 0 and 0.042 at alpha 0.1 on the mean code; none on the standardised code. With alpha 0.1, forcing axis 3 negative on the mean code lowers r to 0.49 to 0.55.
+
+Conclusion: with a lower start epsilon the oriented starts give real alternatives, and the CAV-MAE judge chooses among them consistently: its choice on training tracks predicts the test tracks (corr 0.85 to 0.94), agrees with shape matching and the earlier machine judges on axis 1, and adds a consistent choice for axis 2 (negative on both codes). At alpha 0 the anchored S2 match keeps the structure of flat S2 within 0.02. One subset of training tracks, one run per setting.
