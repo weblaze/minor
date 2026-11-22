@@ -1299,3 +1299,19 @@ Conclusion: against GAN images the judge separates orientations more sharply tha
 | random_m | 0.046 | 152 | 0.798 | 0.058 | 130 | 0.808 |
 
 Conclusion: the windows of a track are close in the audio code (93 % nearest-neighbour), and every trained mapper passes part of that on: the shuffled control, trained without any audio information in the loss, still reaches 16 %, because a smooth mapper sends close codes to close images. S3 adds a modest step over that (22 to 25 %), and the outside encoder agrees (DINO v1 slightly higher than DINOv2). The images of one track are similar, but far less similar than the windows themselves: most of the audio's window consistency is lost in the image. Augmentation does not change it. One seed.
+
+## 2026-11-22 — Reach of the G-GAN towards DINOv2 descriptions (local)
+
+- `methods/gan/reach.py`, `pipeline` d090fb1, GTX 1650. Step 1 of passing a picker's description (F1, S2) to a generator (project owner, 2026-11-22: contenders must draw the image; pickers become teachers). Targets: DINOv2 features of 192 random test-split paintings (never seen by the GAN). Per target: best of 512 prior samples by DINOv2 cosine, then 300 Adam steps on z (lr 0.01, loss -cos + 0.1 x prior-radius penalty, best z kept), plain and with the S3 augmentation at every step (aug). Scores are cosine similarities: DINOv2 to the target (searched), DINO v1 ViT-B/16 CLS of the drawn image to DINO v1 of the target painting (never used in the search), novelty = DINOv2 cosine to the nearest training painting. Two generators: in use (seed 0, step 57568, FD 388) and the latest (seed 0, step 101996, FD 346).
+
+| Image | DINOv2, 57568 | DINO v1, 57568 | DINOv2, 101996 | DINO v1, 101996 | novelty (101996) |
+|---|---|---|---|---|---|
+| random prior sample | 0.333 | 0.197 | 0.352 | 0.209 | 0.709 |
+| best of 512 samples | 0.636 | 0.377 | 0.640 | 0.392 | 0.760 |
+| search, plain | 0.766 | 0.394 | 0.779 | 0.409 | 0.773 |
+| search, aug | 0.669 | 0.403 | 0.683 | 0.419 | 0.764 |
+| nearest training painting | 0.753 | 0.561 | 0.753 | 0.561 | — |
+
+- Share of targets where the drawn image is closer (DINOv2) than the nearest training painting: plain 0.60 / 0.69, aug 0.21 / 0.30 (57568 / 101996). Grids: `runs/session_files/reach_grid_s57568.png`, `reach_grid_s101996.png` (rows: target, nearest training painting, best of 512, plain, aug; first 16 targets).
+
+Conclusion: in DINOv2 terms the GAN can draw as close to a held-out painting as the closest real painting (0.78 against 0.75), but an encoder the search did not use sees little of that gain: DINO v1 rises from 0.39 (best of 512) to 0.41 only, against 0.56 for the nearest real painting. Most of what the search adds is read by DINOv2 alone. The augmentation lowers the DINOv2 score without raising DINO v1 much (0.42). In the grids the drawn images keep palette, texture family and density of the target (stripes, colour fields, splashes, line drawings), not its composition. The drawn images are not closer to a training painting than random samples are relative to their targets (novelty 0.77 against similarity 0.78). The later checkpoint is slightly better on every measure. For a picker-to-drawer transfer through this GAN, the description is carried at the level of palette and texture; a training target read by more than one encoder (DINOv2 and DINO v1), or a decoder built for DINOv2 descriptions (G-Diff, RAE), is needed to carry more.
