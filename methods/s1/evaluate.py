@@ -38,6 +38,15 @@ from common import base_parser, build_mapper, generate, run_name
 from data import load_codes
 
 
+def twin_share(x, thresholds=(0.8, 0.9)):
+    """Repetition: share of images whose nearest other image has DINOv2 cosine above each threshold."""
+    unit = x / np.linalg.norm(x, axis=1, keepdims=True)
+    sim = unit @ unit.T
+    np.fill_diagonal(sim, -1)
+    nearest = sim.max(axis=1)
+    return {str(t): float(np.mean(nearest > t)) for t in thresholds}
+
+
 def main():
     parser = base_parser(__doc__, generator=True)
     parser.add_argument("--vae", required=True)
@@ -114,6 +123,8 @@ def main():
         "participation_ratio_generated": participation_ratio(features),
         "participation_ratio_test_art": participation_ratio(test_art),
         "participation_ratio_audio": participation_ratio(codes),
+        "twin_share_generated": twin_share(features),
+        "twin_share_test_art": twin_share(test_art),
     }
     if recon_art is not None:
         results["image_distribution"]["reference_vae_reconstructions"] = against_test_art(recon_art)

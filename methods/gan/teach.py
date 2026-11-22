@@ -64,6 +64,9 @@ def main():
     parser.add_argument("--hours", type=float, default=None, help="stop and save after this many hours")
     parser.add_argument("--w-v1", type=float, default=1.0)
     parser.add_argument("--w-struct", type=float, default=0.0)
+    parser.add_argument("--w-div", type=float, default=0.0,
+                        help="repetition penalty: squared hinge on batch DINOv2 cosine above --div-margin")
+    parser.add_argument("--div-margin", type=float, default=0.8)
     args = parser.parse_args()
     config, device = setup(args)
     hp, s3 = config["mapper"], config["s3"]
@@ -73,7 +76,7 @@ def main():
     set_seed(seed)
     config["run"] = {"variant": args.variant, "vae": str(args.vae), "targets": str(args.targets), "steps": steps,
                      "batch": batch_size, "w_v1": args.w_v1, "w_struct": args.w_struct,
-                     "code": config["audio_code"]["variant"], "generator": args.generator}
+                     "w_div": args.w_div, "div_margin": args.div_margin, "code": config["audio_code"]["variant"], "generator": args.generator}
     log = RunLog(config["paths"]["runs_dir"], f"teach_{args.variant}", config, seed)
 
     generator = load_generator(args.generator, args.vae, config, device)
@@ -129,6 +132,12 @@ def main():
         if args.w_struct > 0:
             terms["struct"] = distance_correlation_loss(pairwise_distances(codes), pairwise_distances(clean))
             loss = loss + args.w_struct * terms["struct"]
+        if args.w_div > 0:
+            unit = F.normalize(clean, dim=-1)
+            sim = unit @ unit.T
+            off = ~torch.eye(batch_size, dtype=torch.bool, device=device)
+            terms["div"] = F.relu(sim[off] - args.div_margin).pow(2).mean()
+            loss = loss + args.w_div * terms["div"]
         optimiser.zero_grad(set_to_none=True)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(mapper.parameters(), 1.0)
