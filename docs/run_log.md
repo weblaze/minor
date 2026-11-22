@@ -1269,3 +1269,19 @@ Conclusion: CAV-MAE can be steered. Trained images sit closer to their own sound
 | 1 | 50k 398.7, 60k 377.4, 70k 386.5, 70338 411.0 |
 
 Conclusion: seed 0 keeps improving (best 329.8 at 95k, saved checkpoint 345.7, against 388 for the generator in use), with noise of about 30 between evaluations. Seed 1 is behind. The new checkpoint is not used yet: switching generators changes every GAN result, so it is kept for the reruns after exploration.
+
+## 2026-11-22 — B-anchor on S2 against a pool of G-GAN images (local)
+
+- `methods/s2/anchor.py --gallery`, `pipeline` 09ce1bf, GTX 1650. Gallery: the 5372 kept images of `gan_pool_r1amp_seed0_57568` (G-GAN seed 0, step 57568) in place of the 4666 training paintings; their CAV-MAE image embeddings from `methods/s4/extract.py --images` (same preprocessing as the paintings). Otherwise as the anchor run of 2026-11-21: eps start 0.005, alpha 0 and 0.1, 8 orientations of the three leading axes, judge z on training tracks, scored on the 789 test tracks (FD against held-out art).
+- Since 2026-11-22 picking systems are references, not contenders (project owner: the system has to draw the image).
+
+| Code | alpha | anchored start | test r | FD | test judge z | train/test judge z corr | lowest-GW start: test r, z |
+|---|---|---|---|---|---|---|---|
+| mean | 0 | (-1, -1, 1) | 0.685 | 485.7 | 5.67 | 0.99 | (1, -1, 1): 0.696, -0.59 |
+| mean | 0.1 | (-1, -1, -1) | 0.575 | 496.5 | 5.55 | 0.98 | (-1, 1, -1): 0.607, 3.02 |
+| standardised | 0 | (1, -1, 1) | 0.590 | 481.5 | 3.94 | 1.00 | (-1, -1, 1): 0.590, -3.16 |
+| standardised | 0.1 | (1, 1, 1) | 0.575 | 498.9 | 3.41 | 0.96 | same |
+
+- Range over the 8 orientations at alpha 0, mean code: test r 0.667 to 0.696, test judge z -4.63 to 6.09, train judge z -8.85 to 12.69.
+
+Conclusion: against GAN images the judge separates orientations more sharply than against paintings (train z up to ±12), and its choice on training tracks predicts the test tracks almost perfectly (0.96 to 1.00). The orientation of axis 1 decides the judge's sign. Anchoring costs 0.011 of r (0.685 against 0.696) at alpha 0. Structure stays close to S2 on paintings (0.71), at FD 486 (GAN images) instead of real art.
