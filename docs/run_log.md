@@ -1315,3 +1315,34 @@ Conclusion: the windows of a track are close in the audio code (93 % nearest-nei
 - Share of targets where the drawn image is closer (DINOv2) than the nearest training painting: plain 0.60 / 0.69, aug 0.21 / 0.30 (57568 / 101996). Grids: `runs/session_files/reach_grid_s57568.png`, `reach_grid_s101996.png` (rows: target, nearest training painting, best of 512, plain, aug; first 16 targets).
 
 Conclusion: in DINOv2 terms the GAN can draw as close to a held-out painting as the closest real painting (0.78 against 0.75), but an encoder the search did not use sees little of that gain: DINO v1 rises from 0.39 (best of 512) to 0.41 only, against 0.56 for the nearest real painting. Most of what the search adds is read by DINOv2 alone. The augmentation lowers the DINOv2 score without raising DINO v1 much (0.42). In the grids the drawn images keep palette, texture family and density of the target (stripes, colour fields, splashes, line drawings), not its composition. The drawn images are not closer to a training painting than random samples are relative to their targets (novelty 0.77 against similarity 0.78). The later checkpoint is slightly better on every measure. For a picker-to-drawer transfer through this GAN, the description is carried at the level of palette and texture; a training target read by more than one encoder (DINOv2 and DINO v1), or a decoder built for DINOv2 descriptions (G-Diff, RAE), is needed to carry more.
+
+## 2026-11-22 — S3 with a structure term through the G-GAN (Kaggle) and checks (local)
+
+- Job `abstraction-s3-struct-gan`, `pipeline` 19eade2 (`methods/s3/train.py --w-struct`). As `abstraction-s3-gan` (generator `gan_r1amp_seed0_20261118T171246Z`, mean code, seed 0, 15000 steps, same augmentation), plus the Q1 structure term on the DINOv2 features with weight 1.0 (ganw10) or 0.3 (ganw03). Identification and S1 evaluation on the 789 test tracks; window consistency (`methods/s3/windows.py`) and second reader (`methods/s3/second_reader.py`) on the GTX 1650.
+
+| Variant | track top1 clean / aug | top10 clean | bits clean | window top1 clean / aug | Mantel r | kNN overlap | FD | participation ratio |
+|---|---|---|---|---|---|---|---|---|
+| s3 (no structure term, earlier run) | 0.777 / 0.859 | 0.990 | 7.42 | 0.397 / 0.460 | 0.179 | — | 425.8 | — |
+| w_struct 0.3 | 0.761 / 0.853 | 0.991 | 7.39 | 0.380 / 0.435 | 0.222 | 0.102 | 435.1 | 24.1 |
+| w_struct 1.0 | 0.750 / 0.833 | 0.984 | 7.42 | 0.388 / 0.407 | 0.513 | 0.111 | 486.1 | 23.4 |
+| Q1 + G-GAN (reference) | — | — | — | — | 0.537 | 0.108 | 458.2 | — |
+
+| Variant | second reader DINO v1 top1 / bits | DINOv2 (fresh reader) top1 / bits | window_top1 DINOv2 / DINO v1 | ratio DINOv2 / DINO v1 |
+|---|---|---|---|---|
+| s3 (earlier) | 0.525 / 6.10 | 0.389 / 5.48 | 0.217 / 0.239 | 0.574 / 0.555 |
+| w_struct 0.3 | 0.497 / 6.00 | 0.371 / 5.53 | 0.227 / 0.257 | 0.567 / 0.547 |
+| w_struct 1.0 | 0.563 / 6.32 | 0.435 / 5.85 | 0.240 / 0.269 | 0.529 / 0.509 |
+
+Conclusion: with the structure term at weight 1.0, S3 keeps its code (track named from its image in 75 % of cases, against 78 % without the term) and gains the distance structure of Q1 (Mantel r 0.51 against 0.18; Q1 through the same GAN 0.54). It is the first system that does both. The code is read at least as well by a fresh reader on DINO v1 (56 % against 53 %), and window consistency rises slightly (24 to 27 %). The cost is realism: FD 486 against 426. Weight 0.3 changes little. One seed.
+
+## 2026-11-22 — Q1 through the G-GAN with a weak CAV-MAE anchor (Kaggle)
+
+- Job `abstraction-q1-anchor-gan`, `pipeline` 19eade2 (`methods/s4/bridge.py --variant q1_anchor`). Q1 losses on the DINOv2 features (w_feat 1.0, w_lat 0.25, w_global 1.0, w_local 1.0) plus the S4 term (frozen CAV-MAE pairs each image with its own sound, InfoNCE) with weight 0.1 (a01) or 0 (a00). Generator `gan_r1amp_seed0_20261118T171246Z`, mean code, seed 0, batch 48, time limit 4.5 h (a00 stopped at step 10609, a01 at 10157), T4.
+
+| Variant | CAV-MAE top10 | median rank (chance about 395) | mean own / other sim | Mantel r | Spearman | kNN overlap | FD | participation ratio |
+|---|---|---|---|---|---|---|---|---|
+| w_av 0 | 0.014 | 389 | 0.003 / 0.001 | 0.462 | 0.493 | 0.095 | 503.3 | 21.6 |
+| w_av 0.1 | 0.015 | 312 | 0.027 / 0.001 | 0.483 | 0.506 | 0.103 | 538.1 | 20.1 |
+| S4 alone (earlier) | 0.070 | 136 | 0.097 / 0.001 | 0.063 | — | 0.073 | 472.1 | 23.8 |
+
+Conclusion: the weak anchor moves CAV-MAE's ranking only a little (median rank 312 against 389) and costs realism (FD 538 against 503), without lowering structure. The w_av 0 run is below the earlier Q1 through the GAN (r 0.46 against 0.54, FD 503 against 458), so the bridge setup (batch 48, 4.5 h) is weaker than the Q1 training it replaces. The anchor is not pursued further for now. One seed.
