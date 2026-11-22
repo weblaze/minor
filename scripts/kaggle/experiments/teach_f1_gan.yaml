@@ -1,0 +1,29 @@
+description: >-
+  Picker to drawer (project owner, 2026-11-22: contenders draw the image; pickers become teachers). A mapper
+  into the improved G-GAN (run 5, seed 0, step 101996) is trained to draw the F1 description of each window,
+  read by DINOv2 and DINO v1 (methods/gan/teach.py). Each chain first retrains F1 (seed 0, standardised code,
+  4000 steps) and computes the teacher descriptions (methods/gan/teacher_targets.py), since the descriptions
+  cannot be uploaded as a dataset. GPU 0 teach, GPU 1 shuffled control (descriptions of other tracks). Mean
+  code, seed 0, batch 48, time limit 4 h, then S1 evaluation on the test split.
+name: abstraction-teach-f1-gan
+branch: pipeline
+kernels:
+  - "{user}/abstraction-features"
+  - "{user}/abstraction-gan-r1-resume2"
+inputs:
+  MERT: mert_embeddings
+  ART_ZIP: abstract_art.zip
+  GAN: gan_r1amp_seed0_20261121T142711Z
+setup:
+  - nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+  - python -m zipfile -e {ART_ZIP} datasets/
+  - ln -s {MERT} datasets/mert_embeddings
+chains:
+  - - f1 train_mapper --variant f1 --seed 0 --tag t0
+    - gan teacher_targets --teacher runs/f1_mapper_f1_t0_seed0_*/mapper.pt --out runs/teacher_f1_t0
+    - gan teach --vae {GAN}/generator.pt --targets runs/teacher_f1_t0/targets.npz --variant teach --seed 0 --tag f1 --batch 48 --hours 4
+    - s1 evaluate --generator gan --vae {GAN}/generator.pt --seed 0 --tag teachf1 --save-images --mapper runs/teach_teach_f1_seed0_*/mapper.pt
+  - - f1 train_mapper --variant f1 --seed 0 --tag t1
+    - gan teacher_targets --teacher runs/f1_mapper_f1_t1_seed0_*/mapper.pt --out runs/teacher_f1_t1
+    - gan teach --vae {GAN}/generator.pt --targets runs/teacher_f1_t1/targets.npz --variant shuffled --seed 0 --tag f1 --batch 48 --hours 4
+    - s1 evaluate --generator gan --vae {GAN}/generator.pt --seed 0 --tag teachshuf --save-images --mapper runs/teach_shuffled_f1_seed0_*/mapper.pt

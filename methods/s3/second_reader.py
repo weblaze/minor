@@ -84,7 +84,7 @@ def main():
     set_seed(seed)
     run = Path(args.run)
     state = torch.load(run / "mapper.pt", map_location=device, weights_only=True)
-    config["audio_code"]["variant"] = state["code"]
+    config["audio_code"]["variant"] = state.get("code") or state["code_transform"]["variant"]
     config["run"] = {"s3_run": str(run), "variant": state["variant"], "encoders": args.encoders}
     log = RunLog(config["paths"]["runs_dir"], run_name(f"second_reader_{state['variant']}", args.smoke), config, seed)
 
