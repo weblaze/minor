@@ -1246,3 +1246,26 @@ Conclusion: the jointly trained mapper and reader invent a code in which the tes
 | 0.1 | 0.668 | 0.694 | 0.085 | 0.738 | 1061 | 13.9 | 0.485 |
 
 Conclusion: a weaker structure term costs about 0.09 of r and barely moves FD (1210 to 1061-1091; Q1 through the same GAN reaches 458). The collapse of S1 through the GAN is therefore not caused by the weight of the structure term. One seed.
+
+## 2026-11-22 — S4 bridge through the G-GAN (Kaggle)
+
+- Job `abstraction-s4-bridge-gan`, `pipeline` 8847d85 (`methods/s4/bridge.py`). Generator `gan_r1amp_seed0_20261118T171246Z`. Mapper trained so that the frozen CAV-MAE pairs each generated image with its own sound among the batch (symmetric InfoNCE, temperature 0.1, centred embeddings) + 1.0 latent SWD + 1.0 DINOv2-feature SWD. Mean code, seed 0, batch 48, time limit 4.5 h (s4 stopped at step 9570, shuffled at 10953), T4.
+- Identification by CAV-MAE on the 789 test tracks (image of each track ranked among the 789 CAV-MAE audio embeddings; chance top1 0.0013, chance median rank about 395), and S1 evaluation.
+
+| Variant | top1 | top10 | median rank | mean own sim | mean other sim | Mantel r | kNN overlap | FD | participation ratio |
+|---|---|---|---|---|---|---|---|---|---|
+| s4 | 0.004 | 0.070 | 136 | 0.097 | 0.001 | 0.063 | 0.073 | 472.1 | 23.8 |
+| shuffled | 0.005 | 0.015 | 373 | 0.004 | 0.000 | 0.147 | 0.070 | 470.9 | 21.7 |
+
+Conclusion: CAV-MAE can be steered. Trained images sit closer to their own sound than to other sounds (median rank 136 against 373 for shuffled, top10 7 % against 1.5 %), at the same realism as the control (FD 472). The effect is weak, and the distance structure is lost (r 0.06, below the shuffled control's 0.15). S4 alone is not a candidate system; its term is tested as a weak anchor on top of Q1 (job `abstraction-q1-anchor-gan`). One seed.
+
+## 2026-11-22 — G-GAN run 5: resume of R1 with amplitude (Kaggle)
+
+- Job `abstraction-gan-r1-resume2`, `pipeline` 5ad1a6e. Seeds 0 and 1 resumed from the 2026-11-18 checkpoints, time limit 9 h, target 150000 steps. Seed 0 reached step 101996, seed 1 step 70338. FD of samples to real art (same evaluation as earlier GAN runs; the generator in use, seed 0 step 57568, is at 388):
+
+| Seed | FD by step |
+|---|---|
+| 0 | 60k 369.8, 70k 349.8, 80k 354.5, 85k 345.8, 90k 332.9, 95k 329.8, 100k 366.4, 101996 345.7 |
+| 1 | 50k 398.7, 60k 377.4, 70k 386.5, 70338 411.0 |
+
+Conclusion: seed 0 keeps improving (best 329.8 at 95k, saved checkpoint 345.7, against 388 for the generator in use), with noise of about 30 between evaluations. Seed 1 is behind. The new checkpoint is not used yet: switching generators changes every GAN result, so it is kept for the reruns after exploration.
