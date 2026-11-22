@@ -17,6 +17,9 @@ Variants:
   s4        as above
   shuffled  each image is paired with the CAV-MAE audio embedding of another track of the batch (new
             permutation every step), so L_av carries no information about the input
+  q1_anchor Q1 with CAV-MAE as a weak anchor: the Q1 loss (weights of methods/q1/config.yaml: feat, lat,
+            global = 1 - Pearson of code and DINOv2-feature distances, local = neighbour KL) plus
+            w_av * L_av (`--w-av`, bridge.w_av). With --w-av 0 it is Q1 trained in this script, the control.
 
 Writes mapper.pt in the format of methods/s1 (methods/s1/evaluate.py scores structure, realism and images).
 
@@ -32,6 +35,7 @@ import torch.nn.functional as F
 from abstraction.encoders.cav_mae import IMAGE_MEAN, IMAGE_SIZE, IMAGE_STD, load_cav_mae, smoke_cav_mae
 from abstraction.generators import add_generator_argument, load_generator
 from abstraction.losses.distribution import sliced_wasserstein
+from abstraction.losses.structure import distance_correlation_loss, neighbour_kl_loss, pairwise_distances
 from abstraction.models.mapper import Mapper
 from abstraction.pipeline.cli import setup
 from abstraction.pipeline.data import art_dataset
@@ -51,7 +55,8 @@ def main():
     parser = add_generator_argument(base_parser(__doc__), "gan")
     parser.add_argument("--vae", required=True, help="generator checkpoint")
     parser.add_argument("--checkpoint", default=None, help="CAV-MAE checkpoint; overrides cav_mae.checkpoint")
-    parser.add_argument("--variant", choices=("s4", "shuffled"), default="s4")
+    parser.add_argument("--variant", choices=("s4", "shuffled", "q1_anchor"), default="s4")
+    parser.add_argument("--w-av", type=float, default=None, help="q1_anchor: weight of L_av; overrides bridge.w_av")
     parser.add_argument("--steps", type=int, default=None)
     parser.add_argument("--hours", type=float, default=None)
     parser.add_argument("--batch-size", type=int, default=None, help="overrides mapper.batch_size")
@@ -65,8 +70,13 @@ def main():
     steps = args.steps or (30 if args.smoke else hp["steps"])
     set_seed(seed)
     embeddings = args.embeddings or config["cav_mae"]["embeddings"]
+    if args.w_av is not None:
+        bridge["w_av"] = args.w_av
+    anchor = args.variant == "q1_anchor"
+    weights = ({"av": bridge["w_av"], **{k: bridge["q1"][f"w_{k}"] for k in ("lat", "feat", "global", "local")}}
+               if anchor else {"av": 1.0, "lat": bridge["w_lat"], "feat": bridge["w_feat"]})
     config["run"] = {"variant": args.variant, "vae": str(args.vae), "steps": steps, "code": bridge["code"],
-                     "generator": args.generator, "embeddings": embeddings}
+                     "generator": args.generator, "embeddings": embeddings, "weights": weights}
     log = RunLog(config["paths"]["runs_dir"], run_name(f"bridge_{args.variant}", args.smoke), config, seed)
 
     generator = load_generator(args.generator, args.vae, config, device)
@@ -112,9 +122,14 @@ def main():
         target = torch.arange(len(logits), device=device)
         index = torch.randint(real_latents.shape[0], (hp["real_batch_size"],), generator=g).to(device)
         feat_index = torch.randint(real_features.shape[0], (hp["real_batch_size"],), generator=g).to(device)
+        features = dino(images).float()
         terms = {"av": 0.5 * (F.cross_entropy(logits, target) + F.cross_entropy(logits.T, target)),
                  "lat": sliced_wasserstein(z.float(), real_latents[index], hp["swd_projections"]),
-                 "feat": sliced_wasserstein(dino(images).float(), real_features[feat_index], hp["swd_projections"])}
+                 "feat": sliced_wasserstein(features, real_features[feat_index], hp["swd_projections"])}
+        if anchor:
+            d_audio, d_image = pairwise_distances(codes), pairwise_distances(features)
+            terms["global"] = distance_correlation_loss(d_audio, d_image)
+            terms["local"] = neighbour_kl_loss(d_audio, d_image, bridge["q1"]["local_temperature"])
         top1 = logits.argmax(1).eq(target).float().mean()
         return terms, top1
 
@@ -136,7 +151,7 @@ def main():
         codes, audio = batch(train_codes, train_audio, sampler)
         permute = torch.randperm(len(codes), generator=sampler).to(device) if args.variant == "shuffled" else None
         terms, top1 = losses(codes, audio, sampler, permute)
-        loss = terms["av"] + bridge["w_lat"] * terms["lat"] + bridge["w_feat"] * terms["feat"]
+        loss = sum(weights[k] * terms[k] for k in weights)
         optimiser.zero_grad(set_to_none=True)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(mapper.parameters(), 1.0)

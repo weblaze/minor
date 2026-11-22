@@ -34,6 +34,13 @@ bridge:
   temperature: 0.1          # InfoNCE between CAV-MAE image embeddings and the fixed CAV-MAE audio embeddings
   w_lat: 1.0                # sliced Wasserstein of mapped latents to the generator prior
   w_feat: 1.0               # sliced Wasserstein of DINOv2 features of the images to real art
+  w_av: 0.1                 # q1_anchor: weight of the CAV-MAE term on top of the Q1 loss
+  q1:                       # q1_anchor: Q1 loss weights (methods/q1/config.yaml)
+    w_feat: 1.0
+    w_lat: 0.25
+    w_global: 1.0
+    w_local: 1.0
+    local_temperature: 0.5
 
 eval:
   knn_k: 10
