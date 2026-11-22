@@ -1359,3 +1359,22 @@ Conclusion: the weak anchor moves CAV-MAE's ranking only a little (median rank 3
 | s3 random_m (2026-11-22) | 0.056 | 0.272 | 2.11 | 0.049 | 0.228 | 1.79 |
 
 Conclusion: a fresh reader names Q1 tracks from their images in 43 % of cases (DINO v1), against 23 % for Q1's shuffled control and 6 % for an untrained S3 mapper. A trained mapper makes tracks distinguishable even without audio information in its loss, so the shuffled control, not chance, is the baseline. Q1 training adds about 20 points over it; S3 with the structure term reaches 56 % at similar structure (r 0.51 against 0.54). The fresh reader on the S3 shuffled control was not run. One seed.
+
+## 2026-11-23 — Picker-to-drawer (teach) on the laptop, and a repetition measure
+
+- `methods/gan/teacher_targets.py` and `methods/gan/teach.py` (`pipeline`), GTX 1650. Teacher: F1 mapper `f1_mapper_f1_seed0_20261112T213100Z`. Generator `gan_r1amp_seed0_20261121T142711Z` (FD 346). Variant teach, batch 16, 6000 steps, seed 0. Run `teach_teach_laptop_seed0_20261122T195845Z`, evaluation `s1_eval_teach_teachlap_seed0_20261122T214441Z`. The shuffled control was not run.
+- Test cosine of the drawn image to the teacher's pick: DINOv2 0.407, DINO v1 0.424 (30-step smoke test 0.335 / 0.373; the teacher's own pick 0.622 / 0.820).
+- S1 evaluation: Mantel r 0.152, kNN overlap 0.069 (chance 0.013), trustworthiness 0.687, FD 431, participation ratio 20.4 (test art 44.8).
+- Repetition measure (new, `twins`): share of the 789 test images whose nearest other test image has DINOv2 cosine above 0.9.
+
+| System | twin > 0.9 | twin > 0.8 |
+|---|---|---|
+| G-GAN, random codes | 0.20 | 0.55 |
+| S1 + GAN | 0.76 | 0.92 |
+| Q1 + CAV-MAE pull, a 0.1 / a 0 | 0.33 / 0.31 | 0.79 / 0.77 |
+| S3 + GAN / shuffled | 0.13 / 0.13 | 0.62 / 0.58 |
+| S3 + structure, w 0.3 / w 1.0 | 0.16 / 0.30 | 0.67 / 0.74 |
+| S4 / shuffled | 0.16 / 0.16 | 0.71 / 0.68 |
+| Teach (drawer) | 0.15 | 0.60 |
+
+Conclusion: the twin share follows Arunav's Atlas marks. The systems he called "blobs" or repetitive (S1 + GAN, Q1 + pull, S3 + structure w 1.0) have the highest shares. The drawer repeats little and its samples look varied, but it keeps little structure (r 0.15 against 0.51 for S3 + structure w 1.0). One seed; no shuffled control yet.
