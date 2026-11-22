@@ -1346,3 +1346,16 @@ Conclusion: with the structure term at weight 1.0, S3 keeps its code (track name
 | S4 alone (earlier) | 0.070 | 136 | 0.097 / 0.001 | 0.063 | — | 0.073 | 472.1 | 23.8 |
 
 Conclusion: the weak anchor moves CAV-MAE's ranking only a little (median rank 312 against 389) and costs realism (FD 538 against 503), without lowering structure. The w_av 0 run is below the earlier Q1 through the GAN (r 0.46 against 0.54, FD 503 against 458), so the bridge setup (batch 48, 4.5 h) is weaker than the Q1 training it replaces. The anchor is not pursued further for now. One seed.
+
+## 2026-11-23 — Second reader on Q1 through the G-GAN (local)
+
+- `methods/s3/second_reader.py` (`pipeline` ad57358; now reads the code variant of Q1 checkpoints), GTX 1650. Mappers of `abstraction-gan-bridge-q1` (q1 and shuffled, generator `gan_r1amp_seed0_20261118T171246Z`). As for S3: mapper frozen, one image per track, a fresh reader trained by InfoNCE on the 6408 training tracks, scored on the 789 test tracks (chance top1 0.0013).
+
+| Run | DINO v1 top1 | top10 | bits | DINOv2 top1 | top10 | bits |
+|---|---|---|---|---|---|---|
+| q1 | 0.430 | 0.867 | 5.66 | 0.286 | 0.762 | 4.97 |
+| q1 shuffled | 0.231 | 0.688 | 4.53 | 0.162 | 0.610 | 4.07 |
+| s3_struct w 1.0 (2026-11-22) | 0.563 | 0.925 | 6.32 | 0.435 | 0.891 | 5.85 |
+| s3 random_m (2026-11-22) | 0.056 | 0.272 | 2.11 | 0.049 | 0.228 | 1.79 |
+
+Conclusion: a fresh reader names Q1 tracks from their images in 43 % of cases (DINO v1), against 23 % for Q1's shuffled control and 6 % for an untrained S3 mapper. A trained mapper makes tracks distinguishable even without audio information in its loss, so the shuffled control, not chance, is the baseline. Q1 training adds about 20 points over it; S3 with the structure term reaches 56 % at similar structure (r 0.51 against 0.54). The fresh reader on the S3 shuffled control was not run. One seed.
