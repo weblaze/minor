@@ -1285,3 +1285,17 @@ Conclusion: seed 0 keeps improving (best 329.8 at 95k, saved checkpoint 345.7, a
 - Range over the 8 orientations at alpha 0, mean code: test r 0.667 to 0.696, test judge z -4.63 to 6.09, train judge z -8.85 to 12.69.
 
 Conclusion: against GAN images the judge separates orientations more sharply than against paintings (train z up to ±12), and its choice on training tracks predicts the test tracks almost perfectly (0.96 to 1.00). The orientation of axis 1 decides the judge's sign. Anchoring costs 0.011 of r (0.685 against 0.696) at alpha 0. Structure stays close to S2 on paintings (0.71), at FD 486 (GAN images) instead of real art.
+
+## 2026-11-22 — S3 window consistency (local)
+
+- `methods/s3/windows.py`, `pipeline` 1bcd7cd, GTX 1650. The four S3 runs of `abstraction-s3-gan` (G-GAN seed 0, step 57568). One image per window, 3 windows per test track (2367 images). Each image compared with all other images by cosine similarity, on DINOv2 (training encoder) and DINO v1 (ViT-B/16 CLS, not used in training). window_top1: most similar other image is from the same track (chance 0.0008). same_rank: median rank of the closest same-track image. ratio: mean same-track distance / mean different-track distance. Audio: the same measures on the MERT window codes.
+
+| Source | DINOv2 window_top1 | same_rank | ratio | DINO v1 window_top1 | same_rank | ratio |
+|---|---|---|---|---|---|---|
+| audio codes (MERT) | 0.935 | 1 | 0.238 | | | |
+| s3 | 0.217 | 16 | 0.574 | 0.239 | 11 | 0.555 |
+| s3_noaug | 0.231 | 16 | 0.572 | 0.249 | 11 | 0.549 |
+| shuffled | 0.157 | 39 | 0.662 | 0.178 | 31 | 0.658 |
+| random_m | 0.046 | 152 | 0.798 | 0.058 | 130 | 0.808 |
+
+Conclusion: the windows of a track are close in the audio code (93 % nearest-neighbour), and every trained mapper passes part of that on: the shuffled control, trained without any audio information in the loss, still reaches 16 %, because a smooth mapper sends close codes to close images. S3 adds a modest step over that (22 to 25 %), and the outside encoder agrees (DINO v1 slightly higher than DINOv2). The images of one track are similar, but far less similar than the windows themselves: most of the audio's window consistency is lost in the image. Augmentation does not change it. One seed.
