@@ -1,0 +1,24 @@
+description: >-
+  S3 with the S1 structure term (variant s3_struct) through the G-GAN, after s3 named 78 % of test tracks but
+  kept little distance structure (Mantel r 0.18, run log 2026-11-22). GPU 0 w_struct 1.0, GPU 1 w_struct 0.3.
+  Seed 0, 15000 steps each (time limit 2.75 h), identification and S1 evaluation on the test split.
+name: abstraction-s3-struct-gan
+branch: pipeline
+kernels:
+  - "{user}/abstraction-features"
+  - "{user}/abstraction-gan-r1-resume"
+inputs:
+  MERT: mert_embeddings
+  ART_ZIP: abstract_art.zip
+  GAN: gan_r1amp_seed0_20261118T171246Z
+setup:
+  - nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+  - python -m zipfile -e {ART_ZIP} datasets/
+  - ln -s {MERT} datasets/mert_embeddings
+chains:
+  - - s3 train --vae {GAN}/generator.pt --variant s3_struct --seed 0 --tag ganw10 --w-struct 1.0 --hours 2.75
+    - s3 identify --vae {GAN}/generator.pt --seed 0 --tag ganw10 --run runs/s3_train_s3_struct_ganw10_seed0_*
+    - s1 evaluate --generator gan --vae {GAN}/generator.pt --seed 0 --tag s3w10 --save-images --mapper runs/s3_train_s3_struct_ganw10_seed0_*/mapper.pt
+  - - s3 train --vae {GAN}/generator.pt --variant s3_struct --seed 0 --tag ganw03 --w-struct 0.3 --hours 2.75
+    - s3 identify --vae {GAN}/generator.pt --seed 0 --tag ganw03 --run runs/s3_train_s3_struct_ganw03_seed0_*
+    - s1 evaluate --generator gan --vae {GAN}/generator.pt --seed 0 --tag s3w03 --save-images --mapper runs/s3_train_s3_struct_ganw03_seed0_*/mapper.pt

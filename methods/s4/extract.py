@@ -153,11 +153,20 @@ def main():
     parser.add_argument("--source", default=None, help="audio directory or zip; default paths.fma_audio")
     parser.add_argument("--checkpoint", default=None)
     parser.add_argument("--limit", type=int, default=None, help="first N tracks only")
+    parser.add_argument("--images", default=None, help="embed only this image folder (e.g. a GAN pool) into --out")
+    parser.add_argument("--out", default=None, help="npz for --images")
     args = parser.parse_args()
     config, device = setup(args)
     seed = config["system"]["seed"]
     set_seed(seed)
     hp = config["cav_mae"]
+    if args.images:
+        model = load_cav_mae(args.checkpoint or hp["checkpoint"], device)
+        images = Paintings(args.images)
+        features = extract_images(model, images, hp["image_batch_size"], 0, device)
+        np.savez(args.out, names=np.asarray(images.names), features=features)
+        print(f"{len(features)} images embedded into {args.out}")
+        return
     log = RunLog(config["paths"]["runs_dir"], run_name("extract", args.smoke), config, seed)
 
     if args.smoke:

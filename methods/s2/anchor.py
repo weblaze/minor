@@ -77,6 +77,8 @@ def main():
     parser.add_argument("--null", type=int, default=999)
     parser.add_argument("--eps-start", type=float, default=0.005)
     parser.add_argument("--alpha", type=float, nargs="+", default=[0.0, 0.1])
+    parser.add_argument("--gallery", default=None, help="pool.npz (methods/s2/gan_pool.py) in place of the training paintings")
+    parser.add_argument("--gallery-cav", default=None, help="CAV-MAE embeddings of the pool (methods/s4/extract.py --images)")
     args = parser.parse_args()
     config, device = setup(args)
     seed = config["system"]["seed"]
@@ -90,11 +92,15 @@ def main():
     n_perm = args.permutations or (199 if args.smoke else config["eval"]["n_permutations"])
     config["run"] = {"codes": codes_wanted, "embeddings": args.embeddings, "eps_start": args.eps_start,
                      "alpha": args.alpha, **hp}
-    log = RunLog(config["paths"]["runs_dir"], run_name("eval_anchor", args.smoke), config, seed)
+    log = RunLog(config["paths"]["runs_dir"], run_name("eval_anchor" + ("_pool" if args.gallery else ""), args.smoke),
+                 config, seed)
 
     ids, layers, splits = load_layers(config, args.smoke)
     names, art, art_splits = load_art(config, device, args.smoke)
     gallery, gallery_names = art[art_splits == "train"], names[art_splits == "train"]
+    if args.gallery:
+        with np.load(args.gallery) as pool:
+            gallery, gallery_names = pool["features"].astype(np.float32), pool["names"]
     test_art = art[art_splits == "test"]
     art_mean, art_axes = axes_of(gallery, N_AXES)
     d_b = cosine_distances(torch.as_tensor(gallery, dtype=torch.float32, device=device))
@@ -105,7 +111,7 @@ def main():
         cav_images = rng.normal(size=(len(gallery_names), 16))
     else:
         cav_ids, cav_audio = load_shards(f"{args.embeddings}/audio")
-        with np.load(f"{args.embeddings}/art.npz") as data:
+        with np.load(args.gallery_cav or f"{args.embeddings}/art.npz") as data:
             cav_names, cav_images = data["names"], data["features"]
     track_row = {str(t): i for i, t in enumerate(cav_ids)}
     name_row = {str(n): i for i, n in enumerate(cav_names)}

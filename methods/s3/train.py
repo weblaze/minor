@@ -46,9 +46,12 @@ def main():
     parser.add_argument("--variant", choices=VARIANTS, default="s3")
     parser.add_argument("--steps", type=int, default=None)
     parser.add_argument("--hours", type=float, default=None, help="stop and save after this many hours")
+    parser.add_argument("--w-struct", type=float, default=None, help="weight of the structure term (s3_struct)")
     args = parser.parse_args()
     config, device = setup(args)
     hp, s3 = config["mapper"], config["s3"]
+    if args.w_struct is not None:
+        s3["w_struct"] = args.w_struct
     seed = config["system"]["seed"]
     steps = args.steps or (30 if args.smoke else hp["steps"])
     use_aug = args.variant != "s3_noaug"
