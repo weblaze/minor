@@ -11,10 +11,10 @@ The `main` branch holds the cleaned code base and no trained model. Since 2026-1
 
 Data in use: FMA-small (music) and abstract paintings from four WikiArt styles. Encoders: MERT-v1-95M (audio) and DINOv2 ViT-S/14 (image), both frozen and both trained without text. From phase 2 also CAV-MAE-Scale++, an audio-visual model pretrained on video without text or labels.
 
-| Phase | State on 2026-11-22 |
+| Phase | State on 2026-11-23 |
 |---|---|
 | 1: structure transfer with a VAE (S0, S1, Q1, F1, S2) | S0, S1, Q1, F1 and S2 run and evaluated; a paper draft exists; human judging page built |
-| 2: S4, then S3, with G-GAN and then diffusion | G-GAN trained in three runs and still improving; S4 probe run; Q1 through the GAN gives varied art-like images with structure; S1 through it collapses; S3 through the GAN names the track from its image for 78 % of held-out tracks; S4 bridge built; diffusion not started |
+| 2: S4, then S3, with G-GAN and then diffusion | G-GAN trained in five runs; Q1 through the GAN gives varied art-like images with structure; S1 through it collapses; S3 with a structure term names the track from its image for 75 % of held-out tracks and gives similar tracks similar images; S4 bridge weak; picker-to-drawer mapper built; diffusion not started |
 | 2.5 and 3 | not started |
 
 Progress of phase 1 (as of 2026-11-14):
@@ -39,7 +39,11 @@ Progress since 2026-11-14:
 - Machine anchoring and grouping (2026-11-21): the video-trained model's choice among twenty F1 mappings, made on validation tracks, carries over to test tracks (correlation 0.88) and agrees with the majority orientation. Splitting both collections into groups and matching group to group lowers structure for S2 and F1 at every group count tried. With every orientation tried as a start of the S2 shape match, the same model's choice on training tracks also holds on test tracks (correlation 0.85 to 0.94), agrees with the earlier judges on the leading axis and settles the second axis the same way on both audio codes, at almost no cost in structure.
 - Q1 painted through the GAN keeps the structure (Mantel r 0.54) with varied, art-like images (Frechet distance 458, near the GAN's own samples at 388): its feature-space realism term prevents the collapse seen with S1.
 - S3 (a mapper and a reader trained together so that the track can be identified from its image) invents a visual code through the GAN: from the image alone the reader names the right one of 789 held-out tracks in 78 % of cases (chance 0.13 %), with art-like images (Frechet distance 426). A fresh reader on a different self-supervised image encoder (DINO v1), never used in training, still names 52 %, so the code is in visible content. Similar tracks are not given similar images (Mantel r 0.18).
-- An S4 bridge (the mapper is trained so that the video-trained model pairs each generated image with its own sound) is built and queued.
+- S4 bridge (the mapper is trained so that the video-trained model pairs each generated image with its own sound): the model can be steered (held-out tracks rank their own sound at median 136 of 789, against 373 for a shuffled control), but the effect is weak and the distance structure is lost (Mantel r 0.06). Added as a weak term on top of Q1 it moves the model's ranking little (312 against 389) and costs realism.
+- Decision of 2026-11-22: the system has to draw the image. Methods that pick an existing painting (F1, S2) are kept as references and as teachers for a drawing system, not as candidate systems.
+- S3 with the structure term of S1 (weight 1.0) keeps its code (75 % of held-out tracks named from the image) and gains the distance structure of Q1 (Mantel r 0.51 against 0.18; Q1 0.54), at Frechet distance 486. A fresh reader on DINO v1 names 56 %. It is the first system that both makes tracks distinguishable and gives similar tracks similar images.
+- Reach of the GAN: searching the GAN input for the DINOv2 description of a held-out painting finds images as close in DINOv2 terms as the nearest real painting (0.78 against 0.75), but a second encoder sees little of that gain; the images keep palette, texture and density, not composition. A drawing mapper trained on the descriptions of the F1 picker, read by both encoders, is built (`methods/gan/teach.py`).
+- Different 10 s windows of a track give images that are more alike than images of other tracks (nearest image from the same track 22 to 27 %, chance 0.1 %), but far less alike than the windows themselves are in the audio representation (93 %).
 - S1 painted through the GAN keeps the distance structure of the music on held-out tracks (Mantel r 0.75) but maps most tracks to one family of red striped images (Frechet distance 1210).
 - A judging page for the human pilot of phase 1 is built: judges hear a clip and pick the picture that fits it, and pair clips and pictures by similarity.
 
