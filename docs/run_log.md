@@ -1395,3 +1395,18 @@ Conclusions:
 - The drawer adds only 6 points over its shuffled control (35 % vs 29 %) and r 0.15 vs 0.06. Teaching from F1's single pick carries little of the song; most of what it learns is art-likeness.
 - The batch-only repetition penalty stayed at zero after a few steps: within 16 random tracks no pair exceeds cosine 0.8. Replaced by a penalty against a bank of the last 1024 images (`methods/s3/common.py` TwinPenalty, 2fdf8e5), which fires on about 70 % of images at the start of training.
 - Every G-GAN system, random codes included (0.55), has a twin share at 0.8 far above real art (0.10). Part of the repetition is the generator's own range.
+
+## 2026-11-23 — Laptop queue batch 2: S3 + structure with the repetition penalty
+
+- GTX 1650, `runs/queue/batch2.sh` (`pipeline` 2fdf8e5). Improved G-GAN (`gan_r1amp_seed0_20261121T142711Z`). S3 variant s3_struct, w_struct 1.0, batch 32 (Kaggle uses 64), 12000 steps, seed 0. Repetition penalty `TwinPenalty`: squared hinge on each image's nearest DINOv2 cosine among the batch and the last 1024 images, margin 0.8. Fresh reader as before (seed 42).
+
+| Run | w_div | Mantel r | FD | PR | twin 0.8 / 0.9 | fresh reader top1 (DINO v1 / DINOv2) |
+|---|---|---|---|---|---|---|
+| lapd0 | 0 | 0.399 | 468 | 23.6 | 0.65 / 0.12 | 0.447 / 0.381 |
+| lapd10 | 10 | 0.351 | 461 | 24.7 | 0.68 / 0.14 | 0.526 / 0.378 |
+| lapd30 | 30 | 0.362 | 426 | 29.1 | 0.55 / 0.04 | 0.537 / 0.387 |
+| teach sd10 (drawer, w_struct 1.0) | 10 | 0.339 | 472 | 21.6 | 0.65 / 0.12 | not run |
+
+Test art: twin 0.10 / 0.007, PR 44.8.
+
+Conclusion: at w_div 30 near-copies (0.9) fall from 12 % to 4 % of test images, FD falls 468 → 426 and PR rises 23.6 → 29.1, while Mantel r drops 0.04 and the fresh reader names more tracks (45 → 54 %). w_div 10 is too weak to change the twin share. The samples at w_div 30 still show a recurring family (vertical stripes in orange, teal and navy). One seed; batch 32 lowers r against the Kaggle batch-64 run (0.51).
