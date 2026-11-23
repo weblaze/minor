@@ -35,7 +35,7 @@ from abstraction.pipeline.data import art_dataset, sample_windows
 from abstraction.pipeline.features import build_dino, features_of_dataset
 from abstraction.utils.runlog import RunLog, set_seed
 
-from common import Reader, augment, base_parser, build_mapper, code_dim, generate, info_nce, load_codes, run_name
+from common import Reader, TwinPenalty, augment, base_parser, build_mapper, code_dim, generate, info_nce, load_codes, run_name
 
 VARIANTS = ("s3", "s3_noaug", "s3_struct", "shuffled", "random_m")
 
@@ -47,6 +47,10 @@ def main():
     parser.add_argument("--steps", type=int, default=None)
     parser.add_argument("--hours", type=float, default=None, help="stop and save after this many hours")
     parser.add_argument("--w-struct", type=float, default=None, help="weight of the structure term (s3_struct)")
+    parser.add_argument("--batch", type=int, default=None)
+    parser.add_argument("--w-div", type=float, default=0.0, help="repetition penalty (common.TwinPenalty)")
+    parser.add_argument("--div-margin", type=float, default=0.8)
+    parser.add_argument("--div-bank", type=int, default=1024)
     args = parser.parse_args()
     config, device = setup(args)
     hp, s3 = config["mapper"], config["s3"]
@@ -57,7 +61,8 @@ def main():
     use_aug = args.variant != "s3_noaug"
     set_seed(seed)
     config["run"] = {"variant": args.variant, "vae": str(args.vae), "steps": steps,
-                     "code": config["audio_code"]["variant"], "generator": args.generator}
+                     "code": config["audio_code"]["variant"], "generator": args.generator,
+                     "batch": args.batch, "w_div": args.w_div, "div_margin": args.div_margin, "div_bank": args.div_bank}
     log = RunLog(config["paths"]["runs_dir"], run_name(f"train_{args.variant}", args.smoke), config, seed)
 
     generator = load_generator(args.generator, args.vae, config, device)
@@ -84,11 +89,12 @@ def main():
     params = [p for g in groups for p in g["params"]]
     optimiser = torch.optim.AdamW(groups)
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimiser, lambda s: 0.5 * (1 + math.cos(math.pi * s / steps)))
-    batch_size = min(hp["batch_size"], train_codes.shape[0])
+    batch_size = min(args.batch or hp["batch_size"], train_codes.shape[0])
+    twin = TwinPenalty(args.div_bank, args.div_margin) if args.w_div > 0 else None
     sampler = torch.Generator().manual_seed(seed)
     started = time.time()
 
-    def losses(codes, g, permute):
+    def losses(codes, g, permute, twin=None):
         normed = (codes - code_mean) / code_std
         images, z = generate(mapper, generator, codes, code_mean, code_std)
         z = z.float().flatten(1)
@@ -104,6 +110,8 @@ def main():
             "feat": sliced_wasserstein(clean, real_features[feat_index], hp["swd_projections"]),
             "struct": distance_correlation_loss(pairwise_distances(codes), pairwise_distances(clean)),
         }
+        if twin is not None:
+            terms["twin"], terms["twin_rate"] = twin(clean)
         top1 = (image_embed @ audio_embed.T).argmax(1).eq(torch.arange(len(codes), device=device)).float().mean()
         return terms, top1
 
@@ -113,6 +121,8 @@ def main():
             loss = loss + s3["w_lat"] * terms["lat"] + s3["w_feat"] * terms["feat"]
         if args.variant == "s3_struct":
             loss = loss + s3["w_struct"] * terms["struct"]
+        if "twin" in terms:
+            loss = loss + args.w_div * terms["twin"]
         return loss
 
     def validate():
@@ -132,7 +142,7 @@ def main():
     for step in range(steps):
         codes = sample_windows(train_codes, batch_size, sampler)
         permute = torch.randperm(len(codes), generator=sampler).to(device) if args.variant == "shuffled" else None
-        terms, top1 = losses(codes, sampler, permute)
+        terms, top1 = losses(codes, sampler, permute, twin)
         loss = total(terms)
         optimiser.zero_grad(set_to_none=True)
         loss.backward()

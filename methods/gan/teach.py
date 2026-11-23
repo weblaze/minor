@@ -44,7 +44,7 @@ from abstraction.pipeline.features import build_dino, features_of_dataset
 from abstraction.utils.runlog import RunLog, set_seed
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "s3"))
-from common import augment, base_parser, build_mapper, generate, load_codes  # noqa: E402
+from common import TwinPenalty, augment, base_parser, build_mapper, generate, load_codes  # noqa: E402
 from second_reader import DinoV1  # noqa: E402
 
 VARIANTS = ("teach", "shuffled")
@@ -65,8 +65,9 @@ def main():
     parser.add_argument("--w-v1", type=float, default=1.0)
     parser.add_argument("--w-struct", type=float, default=0.0)
     parser.add_argument("--w-div", type=float, default=0.0,
-                        help="repetition penalty: squared hinge on batch DINOv2 cosine above --div-margin")
+                        help="repetition penalty (s3 common.TwinPenalty)")
     parser.add_argument("--div-margin", type=float, default=0.8)
+    parser.add_argument("--div-bank", type=int, default=1024)
     args = parser.parse_args()
     config, device = setup(args)
     hp, s3 = config["mapper"], config["s3"]
@@ -110,6 +111,7 @@ def main():
     g = torch.Generator().manual_seed(seed)
     n_tracks, n_windows = train_codes.shape[:2]
     started = time.time()
+    twin = TwinPenalty(args.div_bank, args.div_margin) if args.w_div > 0 else None
 
     step = 0
     for step in range(steps):
@@ -133,11 +135,8 @@ def main():
             terms["struct"] = distance_correlation_loss(pairwise_distances(codes), pairwise_distances(clean))
             loss = loss + args.w_struct * terms["struct"]
         if args.w_div > 0:
-            unit = F.normalize(clean, dim=-1)
-            sim = unit @ unit.T
-            off = ~torch.eye(batch_size, dtype=torch.bool, device=device)
-            terms["div"] = F.relu(sim[off] - args.div_margin).pow(2).mean()
-            loss = loss + args.w_div * terms["div"]
+            terms["twin"], terms["twin_rate"] = twin(clean)
+            loss = loss + args.w_div * terms["twin"]
         optimiser.zero_grad(set_to_none=True)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(mapper.parameters(), 1.0)

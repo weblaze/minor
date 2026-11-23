@@ -81,3 +81,23 @@ def info_nce(image_embed, audio_embed, temperature):
     logits = image_embed @ audio_embed.T / temperature
     target = torch.arange(len(logits), device=logits.device)
     return 0.5 * (F.cross_entropy(logits, target) + F.cross_entropy(logits.T, target))
+
+
+class TwinPenalty:
+    """Repetition penalty. Each image's nearest neighbour among the batch and a bank of recent (detached) images,
+    by DINOv2 cosine; squared hinge above `margin`. Matches the twin share of methods/s1/evaluate.py, which a
+    batch alone rarely triggers (batch-only version, 2026-11-23: zero after a few steps)."""
+
+    def __init__(self, size, margin):
+        self.size, self.margin, self.bank = size, margin, None
+
+    def __call__(self, features):
+        unit = F.normalize(features.float(), dim=-1)
+        sim = unit @ unit.T
+        sim = sim.masked_fill(torch.eye(len(unit), dtype=torch.bool, device=unit.device), -1)
+        nearest = sim.max(1).values
+        if self.bank is not None:
+            nearest = torch.maximum(nearest, (unit @ self.bank.T).max(1).values)
+        new = unit.detach() if self.bank is None else torch.cat([unit.detach(), self.bank])
+        self.bank = new[:self.size]
+        return F.relu(nearest - self.margin).pow(2).mean(), (nearest > self.margin).float().mean()
