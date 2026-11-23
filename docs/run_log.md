@@ -1378,3 +1378,20 @@ Conclusion: a fresh reader names Q1 tracks from their images in 43 % of cases (D
 | Teach (drawer) | 0.15 | 0.60 |
 
 Conclusion: the twin share follows Arunav's Atlas marks. The systems he called "blobs" or repetitive (S1 + GAN, Q1 + pull, S3 + structure w 1.0) have the highest shares. The drawer repeats little and its samples look varied, but it keeps little structure (r 0.15 against 0.51 for S3 + structure w 1.0). One seed; no shuffled control yet.
+
+## 2026-11-23 — Laptop queue batch 1: drawer control, fresh readers, structure + batch repetition penalty
+
+- GTX 1650, queue `runs/queue/batch1.sh` (`pipeline` 666a07c). Improved G-GAN (`gan_r1amp_seed0_20261121T142711Z`) except the S3 shuffled control (generator in use). Seed 0 for training; the fresh reader uses its default seed 42. Twin share (S1 evaluation, new): share of the 789 test images whose nearest other test image has DINOv2 cosine above 0.8 / 0.9. Test art: 0.10 / 0.007.
+
+| Run | cos to teacher pick (v2 / v1) | Mantel r | FD | PR | twin 0.8 / 0.9 | fresh reader top1 (DINO v1 / DINOv2) |
+|---|---|---|---|---|---|---|
+| teach | 0.407 / 0.424 | 0.152 | 431 | 20.4 | 0.60 / 0.15 | 0.354 / 0.237 |
+| teach shuffled | 0.345 / 0.341 | 0.057 | 439 | 24.5 | 0.62 / 0.12 | 0.292 / 0.208 |
+| teach + struct 1.0 + batch penalty 1.0 | 0.377 / 0.366 | 0.254 | 500 | 24.9 | 0.63 / 0.20 | 0.330 / 0.210 |
+| S3 shuffled control (2026-11-21 run) | — | — | — | — | 0.58 / 0.13 | 0.293 / 0.169 |
+
+Conclusions:
+- S3's shuffled control is named by a fresh reader in 29 % of cases (DINO v1). S3 + structure w 1.0 reaches 56 %, so its training adds about 27 points; Q1 + GAN (43 %) adds about 20 over its own control (23 %).
+- The drawer adds only 6 points over its shuffled control (35 % vs 29 %) and r 0.15 vs 0.06. Teaching from F1's single pick carries little of the song; most of what it learns is art-likeness.
+- The batch-only repetition penalty stayed at zero after a few steps: within 16 random tracks no pair exceeds cosine 0.8. Replaced by a penalty against a bank of the last 1024 images (`methods/s3/common.py` TwinPenalty, 2fdf8e5), which fires on about 70 % of images at the start of training.
+- Every G-GAN system, random codes included (0.55), has a twin share at 0.8 far above real art (0.10). Part of the repetition is the generator's own range.
