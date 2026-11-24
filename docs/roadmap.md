@@ -64,6 +64,19 @@ From 2026-11-16 the working branch is `pipeline`: all methods (S1, Q1, F1, G-GAN
 
 Every evaluated run is collected by `scripts/results.py` into `docs/results.md` and `docs/results.csv`; `scripts/smoke.py` runs the smoke pipeline of every method on a branch.
 
+## Order from 2026-11-24 (project owner's decision; supersedes the order of phases 2.5 and 3 above)
+
+1. Other generator techniques (G-Diff and other diffusion or flow methods, other GANs) for the contending bridges. If a technique needs more and better data to work, step 4 moves up to this point.
+2. B-anchor and B-cluster on all contending techniques.
+3. B-time on the best contenders.
+4. Larger and more varied music and art data, after phase 3 is wrapped: the contenders are retrained on it, and methods that did poorly earlier are retried in case data was their limit.
+5. Last stand: S5, S6, D-human and D-complexity.
+
+- Higher image resolution is applied to the winning systems only.
+- A human judging round is held once there are proper questions to put (systems whose images read as art).
+- Multi-seed runs are made for the winning candidates at the end of the research phase.
+- Images in the art set that are photos of objects or rooms stay in the set.
+
 ## After all methods
 
 - E-other-music and E-2nd-image. The second image encoder is tested on a selected few methods to measure whether a change of encoder changes the outcome.
