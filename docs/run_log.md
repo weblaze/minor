@@ -1410,3 +1410,16 @@ Conclusions:
 Test art: twin 0.10 / 0.007, PR 44.8.
 
 Conclusion: at w_div 30 near-copies (0.9) fall from 12 % to 4 % of test images, FD falls 468 → 426 and PR rises 23.6 → 29.1, while Mantel r drops 0.04 and the fresh reader names more tracks (45 → 54 %). w_div 10 is too weak to change the twin share. The samples at w_div 30 still show a recurring family (vertical stripes in orange, teal and navy). One seed; batch 32 lowers r against the Kaggle batch-64 run (0.51).
+
+## 2026-11-24 — Laptop queue batch 3: penalty strength, margin, lighter structure
+
+Setup as batch 2 (`runs/queue/batch3.sh`, seed 0, batch 32, 12000 steps, improved G-GAN).
+
+| Run | w_div | margin | w_struct | Mantel r | FD | PR | twin 0.8 / 0.9 | fresh reader top1 (DINO v1 / DINOv2) |
+|---|---|---|---|---|---|---|---|---|
+| lapd30 (batch 2) | 30 | 0.8 | 1.0 | 0.362 | 426 | 29.1 | 0.55 / 0.04 | 0.537 / 0.387 |
+| lapd100 | 100 | 0.8 | 1.0 | 0.310 | 434 | 29.3 | 0.48 / 0.035 | 0.461 / 0.338 |
+| lapd30m7 | 30 | 0.7 | 1.0 | 0.321 | 424 | 32.9 | 0.41 / 0.037 | 0.458 / 0.332 |
+| lapd30s03 | 30 | 0.8 | 0.3 | 0.242 | 401 | 30.4 | 0.47 / 0.066 | 0.485 / 0.378 |
+
+Conclusion: a stronger penalty or a lower margin removes more look-alikes (twin 0.8 down to 0.41) but costs structure (r 0.31 to 0.32) and naming (46 %). A lighter structure term gives the best FD (401) at r 0.24. w_div 30 at margin 0.8 with w_struct 1.0 stays the best balance. One seed each; batch 4 repeats the key pair on seed 1 and adds the shuffled control with the penalty.
