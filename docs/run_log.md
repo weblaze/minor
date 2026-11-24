@@ -1443,3 +1443,14 @@ Conclusion: image twins come from similar-sounding tracks far more often than ch
 
 - Generation is deterministic: mapper and generator add no noise at inference (augmentation is used only in training), so the same audio input always gives the same image. Different 10 s windows of one track give different images (window identification 24 to 37 %).
 - Image Atlas v7: 10 cards in the new groups "Drawer" and "S3 no-repeat", with near-copy and fresh-reader numbers.
+
+## 2026-11-25 — Evaluation-only diagnostics for the combination analysis
+
+Script: session scratchpad `diagnostics.py` (no training; DINOv2 CLS cache `datasets/dino_art_features/cls_112.npz`, existing evaluation features). Assumptions of `docs/combinations.md` checked:
+
+- **Q1 + G-GAN repeats as much as S3 + structure.** Twin share (DINOv2 cosine of nearest other image) 0.8 / 0.9: Q1 + GAN 0.71 / 0.27, its shuffled control 0.54 / 0.08, random codes 0.55 / 0.20. The no-repeat penalty has a clear target in Q1 + GAN.
+- **Real art repeats far less than any GAN system, in every style.** Twin share 0.8 / 0.9 at 789 images: all styles 0.10 / 0.02 (test split 0.10 / 0.007); Abstract Expressionism 0.09 / 0.00, Minimalism 0.13 / 0.02, Colour Field 0.23 / 0.04, Action painting (98 images) 0.15 / 0.00. Colour Field is the most repetitive style, but still far below the GAN's 0.55. The repetition comes mainly from the generator, not from the data.
+- **Skew of leading axes.** Mapper input (mean code, standardised per dimension), axes 1-5: 0.25, -0.64, -0.21, -1.00, -0.15. DINOv2 art features, axes 1-5: -0.06, -0.03, 0.16, -0.10, -0.49. The art cloud stays near-symmetric on its leading axes; the code is skewed on axes 2 and 4, so a reflection along axis 2 moves inputs into regions the mapper rarely saw.
+- **The art has little cluster structure.** k-means silhouette, art vs a Gaussian with the same covariance: K 4 0.048 vs 0.027, K 8 0.030 vs 0.022, K 16 0.028 vs 0.018. Clusters follow the four styles only partly (majority-style share 0.65 to 0.71). Hard B-cluster has little to work with on this art.
+- **S3 does not overfit within the steps used.** Validation in-batch top1 rises to the end (Kaggle w 1.0: 0.983 at 15000; laptop lapd30: 0.970 at 12000) and the validation structure loss keeps falling (Kaggle w 1.0: 0.81 at 500 to 0.48 at 15000). Longer training is not ruled out; more data is not shown to be needed for S3 at this size.
+- WikiArt class counts were not checked (needs the WikiArt index online).
