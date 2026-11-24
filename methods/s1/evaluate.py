@@ -47,6 +47,24 @@ def twin_share(x, thresholds=(0.8, 0.9)):
     return {str(t): float(np.mean(nearest > t)) for t in thresholds}
 
 
+def twin_audio_backing(images, codes, threshold=0.9):
+    """Whether image twins are audio neighbours. Features centred, cosine; a twin is the nearest other image
+    above `threshold`. Reports the audio rank of each twin among all other tracks (chance about n / 2)."""
+    def unit(x):
+        x = x.astype(np.float64) - x.mean(axis=0)
+        return x / np.linalg.norm(x, axis=1, keepdims=True)
+    si, sa = unit(images) @ unit(images).T, unit(codes) @ unit(codes).T
+    np.fill_diagonal(si, -np.inf)
+    np.fill_diagonal(sa, -np.inf)
+    nearest = si.argmax(axis=1)
+    twin = si.max(axis=1) > threshold
+    rank = (sa > sa[np.arange(len(sa)), nearest][:, None]).sum(axis=1) + 1
+    out = {"threshold": threshold, "twin_share": float(twin.mean()), "chance_median_rank": (len(sa) - 1) / 2}
+    if twin.any():
+        out.update(median_audio_rank=float(np.median(rank[twin])), audio_top10=float(np.mean(rank[twin] <= 10)))
+    return out
+
+
 def main():
     parser = base_parser(__doc__, generator=True)
     parser.add_argument("--vae", required=True)
@@ -125,6 +143,7 @@ def main():
         "participation_ratio_audio": participation_ratio(codes),
         "twin_share_generated": twin_share(features),
         "twin_share_test_art": twin_share(test_art),
+        "twin_audio_backing": twin_audio_backing(features, codes),
     }
     if recon_art is not None:
         results["image_distribution"]["reference_vae_reconstructions"] = against_test_art(recon_art)
