@@ -1423,3 +1423,23 @@ Setup as batch 2 (`runs/queue/batch3.sh`, seed 0, batch 32, 12000 steps, improve
 | lapd30s03 | 30 | 0.8 | 0.3 | 0.242 | 401 | 30.4 | 0.47 / 0.066 | 0.485 / 0.378 |
 
 Conclusion: a stronger penalty or a lower margin removes more look-alikes (twin 0.8 down to 0.41) but costs structure (r 0.31 to 0.32) and naming (46 %). A lighter structure term gives the best FD (401) at r 0.24. w_div 30 at margin 0.8 with w_struct 1.0 stays the best balance. One seed each; batch 4 repeats the key pair on seed 1 and adds the shuffled control with the penalty.
+
+## 2026-11-24 — Are image twins audio neighbours?
+
+- Script: scratchpad `twin_audio.py`, now `twin_audio_backing` in `methods/s1/evaluate.py` (`pipeline` 38f1756; key `image_distribution.twin_audio_backing`). DINOv2 image features and audio codes of the 789 test tracks, each centred; cosine. A twin is the nearest other image with cosine above 0.9 (centred, so shares are lower than `twin_share`). For each twin, the rank of the twin's track among all 788 other tracks by audio cosine (chance median about 394).
+
+| Run | twin share | median audio rank of twin | twin in audio top 10 | audio cos of twin pairs |
+|---|---|---|---|---|
+| S1 + GAN | 0.12 | 12 | 0.46 | 0.46 |
+| Q1 + CAV-MAE pull, a 0.1 | 0.14 | 36 | 0.27 | 0.35 |
+| S3 + structure w 1.0 (Kaggle) | 0.09 | 26 | 0.29 | 0.35 |
+| S3 + structure, laptop, w_div 0 | 0.04 | 28 | 0.32 | 0.38 |
+| S3 + structure, laptop, w_div 30 | 0.01 | 14 | 0.45 | 0.56 |
+| Drawer, shuffled control | 0.05 | 52 | 0.10 | 0.26 |
+
+Mean audio cosine of all pairs: 0.00.
+
+Conclusion: image twins come from similar-sounding tracks far more often than chance (median rank 12 to 36 against 394), but in most systems 55 to 70 % of twins are not among each other's ten nearest tracks: the mapper merges moderately similar tracks. The repetition penalty removes mainly these; its remaining twins are the most audio-backed. Even the drawer's shuffled control gives rank 52, because a smooth mapper sends nearby codes to nearby images.
+
+- Generation is deterministic: mapper and generator add no noise at inference (augmentation is used only in training), so the same audio input always gives the same image. Different 10 s windows of one track give different images (window identification 24 to 37 %).
+- Image Atlas v7: 10 cards in the new groups "Drawer" and "S3 no-repeat", with near-copy and fresh-reader numbers.
