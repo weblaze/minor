@@ -1454,3 +1454,37 @@ Script: session scratchpad `diagnostics.py` (no training; DINOv2 CLS cache `data
 - **The art has little cluster structure.** k-means silhouette, art vs a Gaussian with the same covariance: K 4 0.048 vs 0.027, K 8 0.030 vs 0.022, K 16 0.028 vs 0.018. Clusters follow the four styles only partly (majority-style share 0.65 to 0.71). Hard B-cluster has little to work with on this art.
 - **S3 does not overfit within the steps used.** Validation in-batch top1 rises to the end (Kaggle w 1.0: 0.983 at 15000; laptop lapd30: 0.970 at 12000) and the validation structure loss keeps falling (Kaggle w 1.0: 0.81 at 500 to 0.48 at 15000). Longer training is not ruled out; more data is not shown to be needed for S3 at this size.
 - WikiArt class counts were not checked (needs the WikiArt index online).
+
+## 2026-11-25 — Laptop batches 4 and 5: second seed of the no-repeat penalty, drawer taught by S2 over a GAN pool, B-anchor by reflection
+
+All on the improved G-GAN (FD 346), laptop GTX 1650. Fresh reader: DINO v1 second reader top1 among 789 test tracks (chance 0.13 %).
+
+**Batch 4: S3 + structure w 1.0, batch 32, 12000 steps, seed 1, and a shuffled control.**
+
+| Run | r | kNN overlap | FD | Twins 0.8 / 0.9 | Fresh reader |
+|---|---|---|---|---|---|
+| w_div 30, seed 0 | 0.36 | 0.10 | 426 | 0.55 / 0.04 | 54 % |
+| w_div 0, seed 0 | 0.40 | — | 468 | — / 0.12 | 45 % |
+| w_div 30, seed 1 | 0.39 | 0.10 | 432 | 0.59 / 0.09 | 48.8 % |
+| w_div 0, seed 1 | 0.40 | 0.12 | 466 | 0.67 / 0.16 | 48.2 % |
+| w_div 30, shuffled codes | 0.06 | 0.05 | 370 | 0.42 / 0.04 | 29 % |
+
+Conclusion: on both seeds the penalty roughly halves the share of near-copies at 0.9 and lowers FD by about 35, with structure unchanged. The fresh-reader gain of seed 0 (54 against 45 %) does not repeat on seed 1 (48.8 against 48.2 %); the penalty makes images more varied, not reliably more identifiable. The shuffled control with the penalty gives 29 %, the same as without it.
+
+**Batch 5a: drawer taught by S2 over a G-GAN pool (`methods/gan/pool_teach.py`).** Pool: 12000 latents, 10861 kept after the blank rule. Assignment of the 6408 training tracks, each to a different pool image: GW 0.048; structure of the assignment on training tracks r 0.68 (shuffled 0.01). Mapper regressed to the assigned latents: training track-mean cosine to the target 0.95 in both variants.
+
+| Variant | Test r | kNN overlap | FD | Twins 0.8 / 0.9 | Fresh reader |
+|---|---|---|---|---|---|
+| teach | 0.14 | 0.02 | 383 | 0.36 / 0.01 | 1.9 % |
+| shuffled | 0.00 | 0.01 | 382 | 0.31 / 0.02 | 0.5 % |
+
+Conclusion: the assignment itself carries strong structure (r 0.68), but a mapper that regresses generator latents memorises the training tracks and generalises poorly to test tracks (r 0.14, fresh reader 1.9 %). Nearby GAN images are not nearby latents, so latent targets are a poor regression target. Any further version should pull the generated image's features towards the assigned image's features through the generator (S3 with fixed targets), not regress latents.
+
+**Batch 5b: B-anchor by code reflection (`methods/s4/reflect_anchor.py`, 3 axes, 8 sign patterns, CAV-MAE judge).**
+
+| Mapper | Chosen | Test gap, original | Best / worst test gap of the flips | Val-test gap correlation | Test median rank, original |
+|---|---|---|---|---|---|
+| S3 + structure, lapd30 | original | 0.024 | 0.023 / −0.008 | 0.93 | 301 of 789 |
+| Drawer (F1-taught) | original | 0.014 | 0.014 / −0.010 | 0.89 | 340 of 789 |
+
+Conclusion: in both mappers the trained orientation is already the one CAV-MAE prefers; every flip is equal or worse, and validation and test agree on the ordering. Reflection gives no gain. Caveat: the code is skewed on axis 2 (−0.64), so flips also move inputs off the training distribution, which by itself lowers the scores. The CAV-MAE signal remains weak (median rank 301 against chance 395).
