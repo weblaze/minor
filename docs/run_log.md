@@ -1499,3 +1499,17 @@ Same as `lapd30` (S3 + structure w 1.0, w_div 30, batch 32, improved G-GAN, seed
 | 24000 | 0.48 | 0.10 | 400 | 0.55 / 0.06 | 52 % / 42 % | 44 % |
 
 Conclusion: longer training raises structure clearly (0.36 to 0.48, the highest of any laptop S3 run) and lowers FD (426 to 400), with near-copies and the fresh reader about the same. This agrees with the validation curves, which were still improving at 12000 steps. Batch 7 repeats 24000 steps on seed 1 and runs 48000 steps on seed 0.
+
+## 2026-11-25 — Laptop batch 7: training length of S3 + structure + penalty 30
+
+Same configuration as batch 6 (S3 + structure w 1.0, w_div 30, batch 32, improved G-GAN).
+
+| Steps, seed | r | kNN overlap | FD | Twins 0.8 / 0.9 | Fresh reader (DINO v1 / DINOv2) | Window identification |
+|---|---|---|---|---|---|---|
+| 12000, seed 0 | 0.36 | 0.10 | 426 | 0.55 / 0.04 | 54 % / — | — |
+| 12000, seed 1 | 0.39 | 0.10 | 432 | 0.59 / 0.09 | 49 % / 38 % | — |
+| 24000, seed 0 | 0.48 | 0.10 | 400 | 0.55 / 0.06 | 52 % / 42 % | 44 % |
+| 24000, seed 1 | 0.51 | 0.10 | 397 | 0.56 / 0.09 | 51 % / 40 % | 43 % |
+| 48000, seed 0 | 0.56 | 0.12 | 423 | 0.58 / 0.06 | 56 % / 45 % | 46 % |
+
+Conclusion: the gain from longer training holds on a second seed (24000 steps: r 0.48 and 0.51). At 48000 steps structure reaches 0.56, the highest of any drawing system so far (Q1 + G-GAN 0.54, Kaggle S3 + structure 0.51), and the fresh reader rises to 56 %. FD falls from 12000 to 24000 steps and rises again at 48000 (400 to 423); near-copies stay at the penalty's level. Batch 8 runs 96000 steps on seed 0.
