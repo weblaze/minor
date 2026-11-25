@@ -1488,3 +1488,14 @@ Conclusion: the assignment itself carries strong structure (r 0.68), but a mappe
 | Drawer (F1-taught) | original | 0.014 | 0.014 / −0.010 | 0.89 | 340 of 789 |
 
 Conclusion: in both mappers the trained orientation is already the one CAV-MAE prefers; every flip is equal or worse, and validation and test agree on the ordering. Reflection gives no gain. Caveat: the code is skewed on axis 2 (−0.64), so flips also move inputs off the training distribution, which by itself lowers the scores. The CAV-MAE signal remains weak (median rank 301 against chance 395).
+
+## 2026-11-25 — Laptop batch 6: S3 + structure + penalty 30 trained twice as long
+
+Same as `lapd30` (S3 + structure w 1.0, w_div 30, batch 32, improved G-GAN, seed 0) but 24000 steps instead of 12000.
+
+| Steps | r | kNN overlap | FD | Twins 0.8 / 0.9 | Fresh reader (DINO v1 / DINOv2) | Window identification |
+|---|---|---|---|---|---|---|
+| 12000 | 0.36 | 0.10 | 426 | 0.55 / 0.04 | 54 % / — | — |
+| 24000 | 0.48 | 0.10 | 400 | 0.55 / 0.06 | 52 % / 42 % | 44 % |
+
+Conclusion: longer training raises structure clearly (0.36 to 0.48, the highest of any laptop S3 run) and lowers FD (426 to 400), with near-copies and the fresh reader about the same. This agrees with the validation curves, which were still improving at 12000 steps. Batch 7 repeats 24000 steps on seed 1 and runs 48000 steps on seed 0.
