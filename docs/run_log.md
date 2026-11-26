@@ -1513,3 +1513,17 @@ Same configuration as batch 6 (S3 + structure w 1.0, w_div 30, batch 32, improve
 | 48000, seed 0 | 0.56 | 0.12 | 423 | 0.58 / 0.06 | 56 % / 45 % | 46 % |
 
 Conclusion: the gain from longer training holds on a second seed (24000 steps: r 0.48 and 0.51). At 48000 steps structure reaches 0.56, the highest of any drawing system so far (Q1 + G-GAN 0.54, Kaggle S3 + structure 0.51), and the fresh reader rises to 56 %. FD falls from 12000 to 24000 steps and rises again at 48000 (400 to 423); near-copies stay at the penalty's level. Batch 8 runs 96000 steps on seed 0.
+
+## 2026-11-26 — Laptop batch 8: S3 + structure + penalty 30 at 96000 steps
+
+Same configuration as batches 6 and 7, seed 0, 96000 steps (13 h on the laptop).
+
+| Steps | r | kNN overlap | FD | Twins 0.8 / 0.9 | Fresh reader (DINO v1 / DINOv2) | Window identification |
+|---|---|---|---|---|---|---|
+| 24000 | 0.48 | 0.10 | 400 | 0.55 / 0.06 | 52 % / 42 % | 44 % |
+| 48000 | 0.56 | 0.12 | 423 | 0.58 / 0.06 | 56 % / 45 % | 46 % |
+| 96000 | 0.57 | 0.10 | 398 | 0.53 / 0.06 | 45 % / 34 % | 49 % |
+
+Validation (in-batch top1, structure loss): 24500 0.931 / 0.57; 48500 0.984 / 0.51; 72500 0.993 / 0.48; 96000 0.992 / 0.46.
+
+Conclusion: structure levels off after about 48000 steps (0.56 to 0.57). The training reader keeps improving, but a fresh reader trained on the same images falls from 56 % to 45 %: beyond about 48000 steps the images adapt to the training reader rather than carrying more of the music. Best length for this configuration: about 48000 steps. Batch 9 repeats 48000 steps on seed 1.
