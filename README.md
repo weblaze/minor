@@ -5,52 +5,47 @@ Research code for music-to-abstract-image generation under two constraints:
 1. No text at any point in training (no captions, no text-supervised encoders such as CLAP or CLIP).
 2. No paired data and no human labels as a training signal. Human judgement is used for evaluation only.
 
-## Status
+## Status (2026-11-27)
 
-The `main` branch holds the cleaned code base and no trained model. Since 2026-11-16 all methods are developed together on the branch [`pipeline`](https://github.com/weblaze/minor/tree/pipeline) (see "Work in progress"). Every run on real data is recorded in [docs/run_log.md on `base`](https://github.com/weblaze/minor/blob/base/docs/run_log.md), including runs with negative outcomes.
+The `main` branch holds the cleaned code base and no trained model. Since 2026-11-16 all methods are developed together on the branch [`pipeline`](https://github.com/weblaze/minor/tree/pipeline). Every run on real data, including runs with negative outcomes, is recorded in [docs/run_log.md on `base`](https://github.com/weblaze/minor/blob/base/docs/run_log.md).
 
-Data in use: FMA-small (music) and abstract paintings from four WikiArt styles. Encoders: MERT-v1-95M (audio) and DINOv2 ViT-S/14 (image), both frozen and both trained without text. From phase 2 also CAV-MAE-Scale++, an audio-visual model pretrained on video without text or labels.
+Data: FMA-small (8,000 music clips of 30 s) and about 5,800 abstract paintings from four WikiArt styles at 128 px. Encoders, all frozen and none trained with text: MERT-v1-95M (audio), DINOv2 ViT-S/14 (image), CAV-MAE-Scale++ (audio-visual, pretrained on video without text or labels).
 
-| Phase | State on 2026-11-24 |
+| Phase | State |
 |---|---|
-| 1: structure transfer with a VAE (S0, S1, Q1, F1, S2) | S0, S1, Q1, F1 and S2 run and evaluated; a paper draft exists; human judging page built |
-| 2: S4, then S3, with G-GAN and then diffusion | G-GAN trained in five runs; Q1 through the GAN gives varied art-like images with structure; S1 through it collapses; S3 with a structure term names the track from its image for 75 % of held-out tracks and gives similar tracks similar images; S4 bridge weak; a drawing mapper taught by the F1 picker carries little of the track; a no-repeat penalty reduces near-identical images; diffusion not started |
-| 2.5 and 3 | not started |
+| 1: structure transfer with a VAE and with retrieval of real paintings (S0, S1, Q1, F1, S2) | Experiments complete; write-up in progress |
+| 2: S4 and S3, with a GAN first, then other generators | GAN stage complete; other generator families are being tried now |
+| 2.5 and 3: orientation, clusters, time, human-made signals | Orientation and cluster alignment partly tested; the rest not started |
 
-Progress of phase 1 (as of 2026-11-14):
+Since 2026-11-22 a candidate system must draw its image. Methods that pick an existing painting are kept as references and teachers, not as candidates.
 
-- Feature extraction, training and evaluation run end to end on free GPU sessions through a job runner (`scripts/kaggle/`).
-- S1 and Q1 have been trained and evaluated on held-out tracks for one seed, with their controls (no structure term, shuffled audio distances, untrained mapping) and two non-learned baselines.
-- The structure objective transfers the distance structure of the audio representation to the outputs on held-out tracks; the controls do not.
-- Open problems identified by these runs: the distribution term does not keep generated images close to the art distribution; the choice of audio representation changes the outcome more than the choice of method; the measured structure depends on the image feature space used to measure it.
-- F1 was added to separate these effects: it maps into image-feature space and assigns real paintings, without an image generator.
-- With real paintings, the leading contrast of the audio representation is mapped to the leading contrast of the art collection in every seed; the orientation of that correspondence and all finer detail are not determined by distance matching alone.
-- Retrieval of real paintings is limited by the sparsity of a finite collection; structure and closeness to the art distribution trade off along one curve, on which the generated-image results also lie.
+## Findings so far
 
-Progress since 2026-11-14:
+The findings below held across seeds or were far larger than their controls. All are machine measurements on held-out tracks. No human evaluation has been completed, so none of them is yet a claim about what people perceive.
 
-- The methods were merged into one tree with a shared front end (`abstraction/pipeline/`), a single entry point (`scripts/run.py`), smoke pipelines and a numerical regression check that every refactoring must pass with zero changed values. Code replaced by the shared front end is kept in `legacy/` folders.
-- G-GAN, an unconditional image generator trained on the art collection, went through three runs. The first collapsed; with an R1 penalty and a residual architecture the second learns, and with mixed precision the third trains about three times faster. Its distance to real art (Frechet distance on DINOv2 features) is below that of the prior samples of every VAE and still falls; it is not yet as close as the VAE reconstructions.
-- A GAN has no encoder. S1 and Q1 now accept it as the painter and then compare their mapped latents with samples of the GAN input distribution instead of latents of real paintings.
-- S4 probe: CAV-MAE embeds all tracks and paintings. It orders tracks partly as MERT does and paintings largely as DINOv2 does, and its sound-image similarity has a part that is specific to the pair and stable across windows of a track. Used directly to pick a painting per track, it carries little of the distance structure of the music. The same similarity scores the two orientations of a mapping (D-S4).
-- S2 matches the shape of the music collection to the shape of the art collection with Gromov-Wasserstein, without pairs and without training. On the mean audio code it gives every test track a different real painting and keeps the distance structure of the music more strongly than the trained F1 mappings; it is solved on the test tracks themselves. Out of sample (the shape match uses training tracks only, and each test track is placed from its audio code alone) the structure holds at Mantel r 0.72 on the mean code, but the tracks crowd onto about 250 paintings; handing out the paintings jointly (each used once) restores a different painting for every track at r 0.71 and Frechet distance 225. Matched against a pool of images drawn by the GAN instead of real paintings, the same procedure gives every track its own newly generated image at r 0.67 (Frechet distance 487). On the standardised code the music fits a structureless reference cloud better than it fits the art.
-- Human judging pilot (4 judges, 124 answers): judges do not yet match tracks to their images above chance for S1, Q1 or F1; the pilot is too small to detect modest effects. By eye, the images generated through the VAE read as blobs and greys, and the R1 GAN is the only generator judged to look like art.
-- Orientation: which way round the leading contrast of the music maps onto the art is not fixed by distance matching. Three machine-side judges now agree on it for the leading axis: the majority of fifty randomly initialised F1 mappings, the score of the video-trained model (D-S4), and the S2 shape match.
-- Machine anchoring and grouping (2026-11-21): the video-trained model's choice among twenty F1 mappings, made on validation tracks, carries over to test tracks (correlation 0.88) and agrees with the majority orientation. Splitting both collections into groups and matching group to group lowers structure for S2 and F1 at every group count tried. With every orientation tried as a start of the S2 shape match, the same model's choice on training tracks also holds on test tracks (correlation 0.85 to 0.94), agrees with the earlier judges on the leading axis and settles the second axis the same way on both audio codes, at almost no cost in structure.
-- Q1 painted through the GAN keeps the structure (Mantel r 0.54) with varied, art-like images (Frechet distance 458, near the GAN's own samples at 388): its feature-space realism term prevents the collapse seen with S1.
-- S3 (a mapper and a reader trained together so that the track can be identified from its image) invents a visual code through the GAN: from the image alone the reader names the right one of 789 held-out tracks in 78 % of cases (chance 0.13 %), with art-like images (Frechet distance 426). A fresh reader on a different self-supervised image encoder (DINO v1), never used in training, still names 52 %, so the code is in visible content. Similar tracks are not given similar images (Mantel r 0.18).
-- S4 bridge (the mapper is trained so that the video-trained model pairs each generated image with its own sound): the model can be steered (held-out tracks rank their own sound at median 136 of 789, against 373 for a shuffled control), but the effect is weak and the distance structure is lost (Mantel r 0.06). Added as a weak term on top of Q1 it moves the model's ranking little (312 against 389) and costs realism.
-- Decision of 2026-11-22: the system has to draw the image. Methods that pick an existing painting (F1, S2) are kept as references and as teachers for a drawing system, not as candidate systems.
-- S3 with the structure term of S1 (weight 1.0) keeps its code (75 % of held-out tracks named from the image) and gains the distance structure of Q1 (Mantel r 0.51 against 0.18; Q1 0.54), at Frechet distance 486. A fresh reader on DINO v1 names 56 %. It is the first system that both makes tracks distinguishable and gives similar tracks similar images.
-- Reach of the GAN: searching the GAN input for the DINOv2 description of a held-out painting finds images as close in DINOv2 terms as the nearest real painting (0.78 against 0.75), but a second encoder sees little of that gain; the images keep palette, texture and density, not composition. A drawing mapper trained on the descriptions of the F1 picker, read by both encoders, is built (`methods/gan/teach.py`).
-- Different 10 s windows of a track give images that are more alike than images of other tracks (nearest image from the same track 22 to 27 %, chance 0.1 %), but far less alike than the windows themselves are in the audio representation (93 %).
-- S1 painted through the GAN keeps the distance structure of the music on held-out tracks (Mantel r 0.75) but maps most tracks to one family of red striped images (Frechet distance 1210).
-- Drawing mapper taught by the F1 picker (laptop, one seed): its images are varied and art-like, but a fresh reader names the track in 35 % of cases against 29 % for a control taught with shuffled tracks, and the distance structure is weak (Mantel r 0.15). Teaching from a single picked painting carries little of the track.
-- Repetition: every system painting through the GAN gives many more near-identical images than real art has. A no-repeat penalty, which pushes each image away from its nearest neighbour among the last 1,024 generated images, lowers the share of near-copies among held-out images from 12 % to 4 % for S3 with the structure term, moves the images closer to real art (Frechet distance 468 to 426) and raises fresh-reader naming (45 % to 54 %), at a small cost in structure (Mantel r 0.40 to 0.36; laptop runs at half the batch size of the cloud runs). The near-copies that remain come mostly from tracks that are close in the audio representation.
-- Generation is deterministic: the same audio input always gives the same image.
-- A judging page for the human pilot of phase 1 is built: judges hear a clip and pick the picture that fits it, and pair clips and pictures by similarity.
+- Without paired data and without text, a trained mapping can carry the distance structure of a music collection onto generated images: tracks that are close in the audio representation receive images that are close in image-feature space, on tracks never seen in training. Controls with permuted audio distances or an untrained mapping do not.
+- Generated images can carry enough of a track to identify it. A reader trained on the images names the correct held-out track far above chance, and a fresh reader built on a different image encoder, which played no part in training, still does. Identifiability and similarity structure can be obtained in the same system.
+- The leading contrast of the music (roughly acoustic against electronic and high-energy) aligns with the leading contrast of the art collection in every seed. Which way round it aligns is not fixed by distance matching alone.
+- The choice of audio representation changes the outcome more than the choice of method.
+- Faithfulness to the music's structure and closeness to real art trade off against each other. Picking existing paintings is limited by how sparsely a finite collection covers the space.
+- Every system that draws through the current GAN produces many more near-identical images than real art contains. A repetition penalty reduces this but does not close the gap; it is the main open problem of the generator stage.
+- Some routes do not work: a drawing network trained to reproduce the generator settings of a chosen image, grouping both collections into clusters before matching them, and a video-trained audio-visual model used on its own as the bridge.
+- Generation is deterministic: the same audio always gives the same image.
 
-Q1 on the mean code has three seeds and the F1 retrieval results have five to fifty; all other results are from a single seed. No human evaluation has been made yet. The results are preliminary and are not reported here as findings.
+## Preliminary observations
+
+From one or two seeds, or from a single check:
+
+- Without any genre or style labels, genre and painting style line up: electronic tracks go mostly to Abstract Expressionism, folk mostly to Colour Field and Minimalism. This follows from the alignment of the leading contrasts.
+- Longer training improves structure up to a point; beyond it the images adapt to the reader they were trained with rather than carrying more of the music.
+- Matching the shape of the music collection to the shape of the art collection, without any training, gives strong structure.
+- How much of the measured structure is specific to the image encoder used to measure it is not settled.
+
+## Not yet shown
+
+- Whether people perceive the correspondence. A small pilot (4 judges) was too small to detect it either way.
+- Whether the images read as art. The best drawing systems are judged "partly" so far.
+- Whether the mapping carries more than energy and genre.
 
 ## How the system works
 
@@ -63,6 +58,7 @@ audio code  -> mapping network (the only trained part of a bridge)
             -> image feature -> nearest real painting             (F1)
 audio codes + art features -> shape matching, no training -> painting per track   (S2)
 audio track + painting -> CAV-MAE (frozen, pretrained on video) -> similarity      (S4)
+audio code  -> mapping network -> GAN -> image; a reader learns to name the track from the image   (S3)
 image       -> DINOv2 ViT-S/14 (frozen, trained without text) -> feature used for training and evaluation
 ```
 
@@ -72,15 +68,18 @@ The components are separate and replaceable: encoder, audio code, bridge, genera
 
 ## Research plan
 
-| Phase | Content |
+Order set on 2026-11-24:
+
+| Step | Content |
 |---|---|
-| 1 | Structure-transfer bridges (S0, S1, Q1, F1, S2) with a VAE generator and with retrieval of real paintings; a closing sweep over combinations of mapping techniques |
-| 2 | Bridges that add a signal beyond distances without human involvement: S4 (how sound and sight co-occur in real-world video), then S3 (a visual language invented by the generator). Each with a GAN first, then diffusion; comparison of VAE, GAN and diffusion |
-| 2.5 | Settling the orientation of the mapping by machine-side tests, and aligning clusters of tracks to clusters of paintings, applied to all methods |
-| 3 | Bridges with human involvement: S5 (human-made co-occurrence), S6 (human preference); use of the temporal sequence within a track |
+| Now | Other generator techniques (GAN losses and architectures, diffusion and flow models); if they need more data, the data step moves up |
+| Next | Orientation anchoring and cluster alignment on all candidate systems, then use of the time sequence within a track on the best ones |
+| Then | Larger and more varied music and art data; retraining of the candidates and of methods that may have been held back by data |
+| Last stand | S5 (human-made co-occurrence), S6 (human preference), D-human, D-complexity |
+| End of research | Higher resolution, multi-seed runs and human judging of the winning systems |
 | After all methods | Other text-free encoders; validation against emotion ratings, psychophysics and colour psychology; creative extensions |
 
-Human judging closes each phase. The full plan and the meaning of every identifier are in [docs/roadmap.md on `base`](https://github.com/weblaze/minor/blob/base/docs/roadmap.md).
+The meaning of every identifier is in [docs/roadmap.md on `base`](https://github.com/weblaze/minor/blob/base/docs/roadmap.md).
 
 ## Documentation
 
