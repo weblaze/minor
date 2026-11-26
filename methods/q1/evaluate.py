@@ -36,6 +36,15 @@ from abstraction.utils.runlog import RunLog, set_seed
 from common import base_parser, build_mapper, code_statistics, generate, run_name
 
 
+def twin_share(x, thresholds=(0.8, 0.9)):
+    """Repetition, as in methods/s1/evaluate.py: share of images whose nearest other image has DINOv2 cosine above each threshold."""
+    unit = x / np.linalg.norm(x, axis=1, keepdims=True)
+    sim = unit @ unit.T
+    np.fill_diagonal(sim, -1)
+    nearest = sim.max(axis=1)
+    return {str(t): float(np.mean(nearest > t)) for t in thresholds}
+
+
 def main():
     parser = base_parser(__doc__, generator=True)
     parser.add_argument("--vae", required=True)
@@ -101,6 +110,7 @@ def main():
     results = {"variant": variant, "mapper_seed": trained_seed, "code_variant": transform["variant"],
                **full_scores(codes, features, test_art, config["eval"]["knn_k"], n_perm, seed)}
     results["image_distribution"]["reference_train_art"] = distribution_scores(train_art, test_art, seed)
+    results["twin_share_generated"], results["twin_share_test_art"] = twin_share(features), twin_share(test_art)
     if recon_art is not None:
         results["image_distribution"]["reference_vae_reconstructions"] = distribution_scores(recon_art, test_art, seed)
     if args.genres:
