@@ -1,6 +1,6 @@
 # Abstraction: everything left to do (as of 2026-11-26)
 
-Collected from `docs/roadmap.md` (order of 2026-11-24), `docs/triage.md`, `docs/combinations.md`, `docs/generator_options.md`, `docs/paper1/missing.md`, `docs/learnability_test.md`, the run log, the project owner's decisions and the vault task list. Items marked *(proposal)* were suggested by Claude and are not yet decided by the owner.
+Collected from `docs/roadmap.md` (order of 2026-11-24), `docs/triage.md`, `docs/combinations.md`, `docs/generator_options.md`, the paper 1 gap list, `docs/learnability_test.md`, the run log, the project owner's decisions and the vault task list. Items marked *(proposal)* were suggested by Claude and are not yet decided by the owner.
 
 ## Where things stand
 
@@ -72,7 +72,7 @@ Collected from `docs/roadmap.md` (order of 2026-11-24), `docs/triage.md`, `docs/
 
 ## Writing and upkeep
 
-- Paper 1 (`docs/paper1/`, draft parked): the gaps in `docs/paper1/missing.md` (analyses to move into the repository, numbers not in the log); organise the phase 1 data, logs, findings and method; funny title when the owner reopens it. A comparison paper later if the material supports it.
+- Paper 1 (draft parked, kept outside the public repository since 2026-11-27): the gaps in its list of missing items (analyses to move into the repository, numbers not in the log); organise the phase 1 data, logs, findings and method; funny title when the owner reopens it. A comparison paper later if the material supports it.
 - Regenerate `docs/results.md` / `docs/results.csv` with `scripts/results.py`; the laptop S3 runs of 2026-11-23 to 2026-11-26 are not in it yet.
 - Main README: add the training-length finding.
 - Vault task list: the phase items are stale against the order of 2026-11-24.
