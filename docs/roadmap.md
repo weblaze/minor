@@ -30,7 +30,7 @@ Set by the project owner on 2026-11-14 (second revision of that day). A bridge c
 
 ## Phase 1: S0, S1, Q1, F1, S2 with G-VAE
 
-Status 2026-11-22: steps 1 to 3 are done (run log entries of 2026-11-14 and 2026-11-15; `docs/paper1/`). A draft of the first paper exists (`docs/paper1/paper.md`) and is parked until the project owner reopens it. S2 has been run transductively, out of sample with joint assignment, and against a pool of G-GAN images. Step 5: a human pilot ran on 2026-11-19 (4 judges, 124 answers, plus 31 imported answers on 2026-11-21); the full judgement waits for a shortlist of winning systems.
+Status 2026-11-22: steps 1 to 3 are done (run log entries of 2026-11-14 and 2026-11-15). A draft of the first paper exists; since 2026-11-27 it is kept outside this public repository until publication, and it is parked until the project owner reopens it. S2 has been run transductively, out of sample with joint assignment, and against a pool of G-GAN images. Step 5: a human pilot ran on 2026-11-19 (4 judges, 124 answers, plus 31 imported answers on 2026-11-21); the full judgement waits for a shortlist of winning systems.
 
 Remaining steps:
 
