@@ -2,7 +2,9 @@
 
 Generator: latent vector -> 4 x 4 feature map -> five residual upsampling blocks -> image in [-1, 1].
 Discriminator: residual downsampling blocks, sum pooling; spectral normalisation or an R1 penalty
-(every `r1_every` steps). Hinge loss. The training images are held in memory. Differentiable augmentation
+(every `r1_every` steps). Hinge loss, or with `--loss rpgan` the relativistic pairing loss of R3GAN
+(arXiv 2501.05441): D: softplus(D(fake) - D(real)), G: softplus(D(real) - D(fake)), on paired real and
+generated images, normally with R1 and R2 (`--r2`, the same gradient penalty on generated images). The training images are held in memory. Differentiable augmentation
 (colour, translation, cutout) is applied to real and generated images before the discriminator.
 An exponential moving average of the generator weights is kept and is the model that is saved
 and evaluated.
@@ -13,6 +15,7 @@ grid. The run stops at `gan.steps` or when `--hours` of wall-clock time have pas
 
 Usage:
   python methods/gan/train_gan.py --seed 0 [--channels 64] [--hours 9] [--no-spectral-norm --r1 10]
+  python methods/gan/train_gan.py --seed 0 --no-spectral-norm --loss rpgan --r1 10 --r2 10
 """
 import argparse
 import copy
@@ -124,6 +127,8 @@ def main():
     parser.add_argument("--steps", type=int, default=None)
     parser.add_argument("--hours", type=float, default=None, help="stop after this much wall-clock time")
     parser.add_argument("--r1", type=float, default=None, help="overrides gan.r1_weight")
+    parser.add_argument("--loss", choices=("hinge", "rpgan"), default=None, help="overrides gan.loss")
+    parser.add_argument("--r2", type=float, default=None, help="overrides gan.r2_weight (penalty on generated images)")
     parser.add_argument("--no-spectral-norm", action="store_true", help="discriminator without spectral normalisation")
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--eval-every", type=int, default=None)
@@ -144,6 +149,12 @@ def main():
         hp["base_channels"] = args.channels
     if args.r1 is not None:
         hp["r1_weight"] = args.r1
+    hp.setdefault("loss", "hinge")
+    hp.setdefault("r2_weight", 0.0)
+    if args.loss:
+        hp["loss"] = args.loss
+    if args.r2 is not None:
+        hp["r2_weight"] = args.r2
     if args.no_spectral_norm:
         hp["spectral_norm"] = False
     if args.batch_size:
@@ -223,26 +234,38 @@ def main():
             flip = torch.rand(len(real), device=device) < 0.5
             real = torch.where(flip.view(-1, 1, 1, 1), real.flip(3), real)
             z = torch.randn(len(real), hp["latent_dim"], device=device)
-            penalise = hp["r1_weight"] > 0 and step % r1_every == 0
+            penalise = (hp["r1_weight"] > 0 or hp["r2_weight"] > 0) and step % r1_every == 0
             with torch.autocast(device.type, enabled=amp):
                 fake = generator(z)
-            real_in = augment(real, policy)
+            real_in, fake_in = augment(real, policy), augment(fake.detach().float(), policy)
             if penalise:
-                real_in.requires_grad_(True)
+                real_in.requires_grad_(hp["r1_weight"] > 0)
+                fake_in.requires_grad_(hp["r2_weight"] > 0)
             with torch.autocast(device.type, enabled=amp and not penalise):
                 d_real = discriminator(real_in)
-                d_fake = discriminator(augment(fake.detach().float(), policy))
-                loss_d = F.relu(1 - d_real.float()).mean() + F.relu(1 + d_fake.float()).mean()
+                d_fake = discriminator(fake_in)
+                if hp["loss"] == "rpgan":
+                    loss_d = F.softplus(d_fake.float() - d_real.float()).mean()
+                else:
+                    loss_d = F.relu(1 - d_real.float()).mean() + F.relu(1 + d_fake.float()).mean()
             if penalise:
-                grad = torch.autograd.grad(d_real.sum(), real_in, create_graph=True)[0]
-                loss_d = loss_d + 0.5 * hp["r1_weight"] * r1_every * grad.pow(2).sum(dim=(1, 2, 3)).mean()
+                for weight, out, inp in ((hp["r1_weight"], d_real, real_in), (hp["r2_weight"], d_fake, fake_in)):
+                    if weight > 0:
+                        grad = torch.autograd.grad(out.sum(), inp, create_graph=True)[0]
+                        loss_d = loss_d + 0.5 * weight * r1_every * grad.pow(2).sum(dim=(1, 2, 3)).mean()
             opt_d.zero_grad(set_to_none=True)
             scaler_d.scale(loss_d).backward()
             scaler_d.step(opt_d)
             scaler_d.update()
 
             with torch.autocast(device.type, enabled=amp):
-                loss_g = -discriminator(augment(fake.float(), policy)).float().mean()
+                g_fake = discriminator(augment(fake.float(), policy)).float()
+                if hp["loss"] == "rpgan":
+                    with torch.no_grad():
+                        g_real = discriminator(real_in.detach()).float()
+                    loss_g = F.softplus(g_real - g_fake).mean()
+                else:
+                    loss_g = -g_fake.mean()
             opt_g.zero_grad(set_to_none=True)
             scaler_g.scale(loss_g).backward()
             scaler_g.step(opt_g)
