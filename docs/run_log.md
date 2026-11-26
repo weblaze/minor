@@ -1527,3 +1527,18 @@ Same configuration as batches 6 and 7, seed 0, 96000 steps (13 h on the laptop).
 Validation (in-batch top1, structure loss): 24500 0.931 / 0.57; 48500 0.984 / 0.51; 72500 0.993 / 0.48; 96000 0.992 / 0.46.
 
 Conclusion: structure levels off after about 48000 steps (0.56 to 0.57). The training reader keeps improving, but a fresh reader trained on the same images falls from 56 % to 45 %: beyond about 48000 steps the images adapt to the training reader rather than carrying more of the music. Best length for this configuration: about 48000 steps. Batch 9 repeats 48000 steps on seed 1.
+
+## 2026-11-26 — Laptop batch 9: 48000 steps on seed 1, and Atlas v8
+
+| Steps | Seed | r | kNN overlap | FD | Twins 0.9 | Fresh reader (DINO v1 / DINOv2) | Window identification |
+|---|---|---|---|---|---|---|---|
+| 24000 | 0 | 0.48 | 0.10 | 400 | 0.06 | 52 % / 42 % | 44 % |
+| 24000 | 1 | 0.51 | 0.10 | 397 | 0.09 | 51 % / 40 % | 43 % |
+| 48000 | 0 | 0.56 | 0.12 | 423 | 0.06 | 56 % / 45 % | 46 % |
+| 48000 | 1 | 0.53 | 0.11 | 389 | 0.07 | 50 % / 40 % | 45 % |
+
+Mean of two seeds: 24000 steps r 0.50, fresh reader 51 %; 48000 steps r 0.54, fresh reader 53 %.
+
+Conclusion: from 24000 to 48000 steps structure rises on both seeds (by 0.08 and 0.02); the fresh reader rises on seed 0 and falls slightly on seed 1. The useful training length for this configuration is 24000 to 48000 steps; 96000 overfits the training reader (batch 8). 48000 steps is the best single setting by structure.
+
+- Image Atlas v8: five cards in the new group "S3 longer training" (24000 and 48000 steps on two seeds, 96000 on one).
