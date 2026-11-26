@@ -1542,3 +1542,18 @@ Mean of two seeds: 24000 steps r 0.50, fresh reader 51 %; 48000 steps r 0.54, fr
 Conclusion: from 24000 to 48000 steps structure rises on both seeds (by 0.08 and 0.02); the fresh reader rises on seed 0 and falls slightly on seed 1. The useful training length for this configuration is 24000 to 48000 steps; 96000 overfits the training reader (batch 8). 48000 steps is the best single setting by structure.
 
 - Image Atlas v8: five cards in the new group "S3 longer training" (24000 and 48000 steps on two seeds, 96000 on one).
+
+## 2026-11-26 — Laptop batch 10: Q1 + G-GAN with the no-repeat penalty
+
+`pipeline` c6186f7: `methods/q1/train_mapper.py` gains `--batch`, `--w-div`, `--div-margin`, `--div-bank` (the bank-based penalty of `methods/s3/common.py`, on the DINOv2 features of the generated images); `methods/q1/evaluate.py` reports the twin share. Q1 variant q1, mean code, improved G-GAN (FD 346), batch 32, 24000 steps, seed 0, laptop GTX 1650 (about 2 h per training run). Fresh reader: `methods/s3/second_reader.py`, top1 among 789 test tracks (chance 0.13 %).
+
+| Run | r | kNN overlap | FD | Twins 0.8 / 0.9 | Fresh reader (DINO v1 / DINOv2) |
+|---|---|---|---|---|---|
+| Q1, w_div 30 | 0.52 | 0.08 | 414 | 0.59 / 0.08 | 39 % / 29 % |
+| Q1, w_div 0 | 0.50 | 0.11 | 457 | 0.72 / 0.16 | 51 % / 38 % |
+| S3 + structure, w_div 30, 24000 steps (batch 6) | 0.48 | 0.10 | 400 | 0.55 / 0.06 | 52 % / 42 % |
+| Q1 + G-GAN, Kaggle, batch 64, 20000 steps (2026-11-21, 2026-11-23) | 0.54 | — | — | — | 43 % / 29 % |
+
+Test art twin share: 0.10 / 0.007.
+
+Conclusion: in Q1 the penalty halves the near-copies at 0.9 (0.16 to 0.08) and lowers FD by 43 with structure unchanged, as in S3. Unlike in S3, it lowers the fresh reader clearly (51 to 39 %): the Q1 images become more varied but less specific to their track. Q1 + penalty does not beat S3 + structure + penalty at the same batch and steps. One seed.
