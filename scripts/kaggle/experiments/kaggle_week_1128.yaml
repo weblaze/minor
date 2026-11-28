@@ -1,0 +1,25 @@
+description: >-
+  Kaggle week of 2026-11-28 (plan approved 2026-11-26). GPU 0: S3 + structure (w 1.0) + no-repeat penalty (w_div 30)
+  on the improved G-GAN at batch 64 and 48000 steps (laptop best at batch 32: 2-seed mean r 0.54, fresh reader 53 %),
+  separating the batch effect; time limit 9.25 h; identification, S1 evaluation and fresh reader on the test split.
+  GPU 1: G-GAN from scratch with the R3GAN relativistic pairing loss + R1 10 + R2 10 (laptop debug batch 11 at 32
+  channels: stable, FD per step slightly below hinge), 64 channels, mixed precision, seed 0, 9.5 h, resumable.
+name: abstraction-kaggle-week-1128
+branch: pipeline
+kernels:
+  - "{user}/abstraction-features"
+  - "{user}/abstraction-gan-r1-resume2"
+inputs:
+  MERT: mert_embeddings
+  ART_ZIP: abstract_art.zip
+  GAN: gan_r1amp_seed0_20261121T142711Z
+setup:
+  - nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+  - python -m zipfile -e {ART_ZIP} datasets/
+  - ln -s {MERT} datasets/mert_embeddings
+chains:
+  - - s3 train --vae {GAN}/generator.pt --variant s3_struct --w-struct 1.0 --w-div 30 --batch 64 --steps 48000 --seed 0 --tag k64L48 --hours 9.25
+    - s3 identify --vae {GAN}/generator.pt --seed 0 --tag k64L48 --run runs/s3_train_s3_struct_k64L48_seed0_*
+    - s1 evaluate --generator gan --vae {GAN}/generator.pt --seed 0 --tag k64L48 --save-images --mapper runs/s3_train_s3_struct_k64L48_seed0_*/mapper.pt
+    - s3 second_reader --vae {GAN}/generator.pt --run runs/s3_train_s3_struct_k64L48_seed0_*
+  - - gan train_gan --seed 0 --channels 64 --steps 150000 --no-spectral-norm --loss rpgan --r1 10 --r2 10 --amp --tag r3 --hours 9.5
