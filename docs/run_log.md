@@ -1557,3 +1557,21 @@ Conclusion: from 24000 to 48000 steps structure rises on both seeds (by 0.08 and
 Test art twin share: 0.10 / 0.007.
 
 Conclusion: in Q1 the penalty halves the near-copies at 0.9 (0.16 to 0.08) and lowers FD by 43 with structure unchanged, as in S3. Unlike in S3, it lowers the fresh reader clearly (51 to 39 %): the Q1 images become more varied but less specific to their track. Q1 + penalty does not beat S3 + structure + penalty at the same batch and steps. One seed.
+
+## 2026-11-27 — Laptop batch 11: R3GAN loss on the G-GAN, debug at small width
+
+`pipeline` 4e1ad53: `methods/gan/train_gan.py --loss rpgan` (relativistic pairing loss of R3GAN, arXiv 2501.05441: D softplus(D(fake) − D(real)), G softplus(D(real) − D(fake)) with D(real) recomputed after the D step) and `--r2` (lazy gradient penalty on generated images, same schedule as R1). Default remains hinge. Both runs: 32 channels, batch 32, no spectral norm, R1 10 every 16 steps, fp32, seed 0, 2 h each on the GTX 1650. Architecture unchanged (loss only).
+
+| Step | FD, rpgan + R1 10 + R2 10 | FD, hinge + R1 10 |
+|---|---|---|
+| 2500 | 1611 | 1723 |
+| 5000 | 1524 | 1583 |
+| 7500 | 1317 | 1422 |
+| 10000 | 1043 | 1208 |
+| end (2 h) | 1080 at 11320 | 831 at 14209 |
+
+Conclusion: the R3GAN loss trains stably (no non-finite losses; D outputs stay small) and its FD is slightly lower at equal steps up to 10000, but each step costs about 25 % more (R2 term and the extra D pass), so in equal time hinge got further. The 2 h debug is far from convergence and says nothing yet about repetition. The full-width run goes to Kaggle.
+
+## 2026-11-28 — Kaggle week job launched
+
+`abstraction-kaggle-week-1128` at `pipeline` c5a1e26 (plan approved by the owner on 2026-11-26). GPU 0: S3 + structure w 1.0 + w_div 30, batch 64, 48000 steps (limit 9.25 h), with identification, S1 evaluation and fresh reader. GPU 1: G-GAN from scratch with `--loss rpgan --r1 10 --r2 10 --amp`, 64 channels, seed 0, 9.5 h (resumable).
